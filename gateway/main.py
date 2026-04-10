@@ -32,6 +32,10 @@ async def lifespan(app: FastAPI):
     redis = get_redis_manager()
     await redis.get_client()  # 初始化 Redis 连接
 
+    # 初始化 HTTP 客户端
+    from app.utils.httpx_manager import HTTPClientManager
+    HTTPClientManager.get_client()
+
     # 加载配置到内存（CORS、HMAC 密钥）
     config_manager = get_config_manager()
     await config_manager.load_configs()
@@ -45,6 +49,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # 关闭时
+    await HTTPClientManager.close()
     await redis.close()
     if settings.CONSUL_ENABLED:
         await consul.close()
