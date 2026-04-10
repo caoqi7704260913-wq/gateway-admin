@@ -1,0 +1,38 @@
+{
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/**": true,
+    "**/.hg/store/**": true,
+    "**/__pycache__/**": true,
+    "**/venv/**": true,
+    "**/env/**": true,
+    "**/.venv/**": true,
+    "**/.pytest_cache/**": true,
+    "**/*.pyc": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/bower_components": true,
+    "**/*.code-search": true,
+    "**/__pycache__": true,
+    "**/venv": true,
+    "**/env": true,
+    "**/.venv": true,
+    "**/.pytest_cache": true,
+    "**/*.pyc": true
+  },
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/venv": true,
+    "**/env": true,
+    "**/.venv": true,
+    "**/.pytest_cache": true,
+    "**/*.pyc": true
+  },
+  "python.analysis.memory": 2048,
+  "python.linting.enabled": true,
+  "python.linting.pylintEnabled": false,
+  "python.linting.flake8Enabled": true,
+  "python.formatting.provider": "black"
+}
