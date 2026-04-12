@@ -59,7 +59,8 @@ class LoadBalancer:
         service_key = self._get_service_key(services)
         count = self._counters.get(service_key, 0)
         selected = services[count % len(services)]
-        self._counters[service_key] = count + 1
+        # 限制计数器大小，防止无限增长
+        self._counters[service_key] = (count + 1) % 10000
         return selected
     
     def _weighted_round_robin(self, services: list[ServiceBase]) -> ServiceBase:
@@ -70,10 +71,14 @@ class LoadBalancer:
             weight = getattr(s, 'weight', 1) or 1
             weighted_list.extend([s] * weight)
         
+        if not weighted_list:
+            return services[0]
+        
         service_key = self._get_service_key(services)
         count = self._counters.get(service_key, 0)
         selected = weighted_list[count % len(weighted_list)]
-        self._counters[service_key] = count + 1
+        # 限制计数器大小，防止无限增长
+        self._counters[service_key] = (count + 1) % 10000
         return selected
     
     def _random(self, services: list[ServiceBase]) -> ServiceBase:

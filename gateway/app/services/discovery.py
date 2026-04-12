@@ -111,6 +111,47 @@ class ServiceDiscovery:
         
         return redis_ok or consul_ok
 
+    async def unregister_service(self, service_name: str, service_id: str) -> bool:
+        """
+        注销服务实例（从 Redis、Consul 和本地缓存中删除）
+        
+        Args:
+            service_name: 服务名称
+            service_id: 服务实例 ID
+        
+        Returns:
+            是否成功注销
+        """
+        redis_ok = False
+        consul_ok = False
+        
+        # 1. 从 Redis 删除
+        try:
+            redis_key = f"service:{service_name}:{service_id}"
+            await self.redis_manager.delete(redis_key)
+            logger.info(f"Service removed from Redis: {service_name} (ID: {service_id})")
+            redis_ok = True
+        except Exception as e:
+            logger.error(f"Failed to remove service from Redis: {e}")
+        
+        # 2. 从 Consul 注销
+        if settings.CONSUL_ENABLED:
+            try:
+                self.consul_manager.deregister_service(service_id)
+                logger.info(f"Service deregistered from Consul: {service_name} (ID: {service_id})")
+                consul_ok = True
+            except Exception as e:
+                logger.error(f"Failed to deregister service from Consul: {e}")
+        
+        # 3. 从本地缓存删除
+        cache_key = self._cache_key(service_name, service_id)
+        if cache_key in self._local_cache:
+            del self._local_cache[cache_key]
+            self._save_local_cache()
+            logger.info(f"Service removed from local cache: {cache_key}")
+        
+        return redis_ok or consul_ok
+
     async def get_healthy_services(self, service_name: str) -> list[ServiceBase]:
         """
         获取健康的服务实例列表（降级策略：Redis → Consul → 本地缓存）

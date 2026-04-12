@@ -31,7 +31,7 @@ class HMACValidator:
         """
         self.secret_key = secret_key or settings.HMAC_SECRET_KEY
         self.timestamp_tolerance = timestamp_tolerance
-        # ✅ 使用 Redis 存储已使用的 nonce（生产环境）
+        # 使用 Redis 存储已使用的 nonce（生产环境）
         self.redis = get_redis_manager()
         self._nonce_ttl = timestamp_tolerance * 2  # Nonce 过期时间为时间戳容差的2倍
 
@@ -91,7 +91,7 @@ class HMACValidator:
         if abs(current_time - timestamp) > self.timestamp_tolerance:
             return False, f"Timestamp expired (tolerance: {self.timestamp_tolerance}s)"
 
-        # ✅ 2. 检查 nonce（防重放）- 使用 Redis
+        # 2. 检查 nonce（防重放）- 使用 Redis
         nonce_key = f"hmac:nonce:{nonce}"
         try:
             exists = await self.redis.exists(nonce_key)
@@ -115,7 +115,7 @@ class HMACValidator:
         if not hmac.compare_digest(signature, expected_signature):
             return False, "Signature mismatch"
 
-        # ✅ 4. 记录 nonce（防重放）- 使用 Redis
+        # 4. 记录 nonce（防重放）- 使用 Redis
         try:
             await self.redis.set(nonce_key, "1", ex=self._nonce_ttl)
         except Exception as e:
@@ -136,7 +136,7 @@ class HMACValidator:
 
     async def clear_used_nonces(self):
         """清空已使用的 nonce（测试用）"""
-        # ✅ 清理 Redis 中的 nonce（通过模式匹配删除）
+        # 清理 Redis 中的 nonce（通过模式匹配删除）
         try:
             keys = await self.redis.keys("hmac:nonce:*")
             if keys:

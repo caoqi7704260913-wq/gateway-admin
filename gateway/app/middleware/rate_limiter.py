@@ -74,7 +74,7 @@ class RateLimiter(BaseHTTPMiddleware):
         redis_key = f"{self.rate_key}:{key}"
 
         try:
-            # ✅ 使用 ZSET 实现滑动窗口
+            # 使用 ZSET 实现滑动窗口
             
             # 1. 删除窗口外的旧数据
             await self.redis.zremrangebyscore(redis_key, 0, window_start)
@@ -86,7 +86,7 @@ class RateLimiter(BaseHTTPMiddleware):
             is_allowed = current_count < self.max_requests
 
             if is_allowed:
-                # ✅ 添加当前请求到 ZSET，score 为时间戳，member 为唯一标识
+                # 添加当前请求到 ZSET，score 为时间戳，member 为唯一标识
                 member = f"{now}:{hash(key)}"
                 await self.redis.zadd(redis_key, {member: now})
                 # 设置过期时间（比窗口稍长，确保清理）

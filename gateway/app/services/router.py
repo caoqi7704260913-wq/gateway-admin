@@ -68,20 +68,7 @@ class Router:
                 content={"error": "Service unavailable", "service": service_name}
             )
 
-        # 3. 检查熔断器
-        cb = self._get_circuit_breaker(service_name)
-        if cb.is_open:  # ✅ 恢复为同步调用
-            logger.warning(f"Circuit breaker open for service: {service_name}")
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "error": "Service temporarily unavailable",
-                    "service": service_name,
-                    "circuit_state": "open"
-                }
-            )
-
-        # 4. 负载均衡选择后端
+        # 3. 负载均衡选择后端
         backend = await self.load_balancer.select(backends)
         if not backend:
             return JSONResponse(
@@ -89,7 +76,7 @@ class Router:
                 content={"error": "No backend available"}
             )
 
-        # 5. 转发请求（带熔断保护）
+        # 4. 转发请求（带熔断保护）
         return await self._forward(request, backend, service_name)
     
     def _match_route(self, path: str) -> Optional[str]:
@@ -158,12 +145,12 @@ class Router:
         Returns:
             后端响应
         """
-        # ✅ 构建目标 URL（正确处理路径）
+        # 构建目标 URL（正确处理路径）
         base_url = backend.url.rstrip("/")
         path = request.url.path.lstrip("/")
         remaining_path = "/".join(path.split("/")[1:]) if "/" in path else ""
         
-        # ✅ 避免双斜杠
+        # 避免双斜杠
         if remaining_path:
             target_url = f"{base_url}/{remaining_path}"
         else:

@@ -75,7 +75,7 @@ class HMACMiddleware(BaseHTTPMiddleware):
 
         # 7. 验证签名（此时已确认 signature 和 nonce 不为 None）
         validator = get_hmac_validator()
-        is_valid, error_msg = await validator.verify_signature(  # ✅ 改为异步调用
+        is_valid, error_msg = await validator.verify_signature(  # 改为异步调用
             signature=signature,  # type: ignore[arg-type]
             body=body_str,
             timestamp=timestamp,

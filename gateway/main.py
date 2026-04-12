@@ -10,7 +10,7 @@ Gateway 主入口
 """
 
 from contextlib import asynccontextmanager
-import asyncio  # ✅ 添加 asyncio 导入
+import asyncio  #  添加 asyncio 导入
 from fastapi import FastAPI, Request
 from loguru import logger
 import uvicorn
@@ -22,14 +22,14 @@ from app.middleware.dynamic_cors import DynamicCORSMiddleware
 from app.api import routes as api_routes
 from app.services.router import get_router
 from app.services.config_manager import get_config_manager
-from app.utils.redis_manager import get_redis_manager, close  # ✅ 导入 close 函数
+from app.utils.redis_manager import get_redis_manager, close  #  导入 close 函数
 from app.utils.consul_manager import get_consul_manager
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    # ✅ 验证关键配置
+    # 验证关键配置
     if settings.HMAC_ENABLED and not settings.HMAC_SECRET_KEY:
         raise RuntimeError(
             "HMAC 已启用但未配置 HMAC_SECRET_KEY！\n"
@@ -40,8 +40,8 @@ async def lifespan(app: FastAPI):
     
     # 启动时
     redis = get_redis_manager()
-    from app.utils.redis_manager import get_client  # ✅ 导入模块级函数
-    get_client()  # ✅ 调用模块级同步函数
+    from app.utils.redis_manager import get_client  #  导入模块级函数
+    get_client()  #  调用模块级同步函数
 
     # 初始化 HTTP 客户端
     from app.utils.httpx_manager import HTTPClientManager
@@ -55,7 +55,7 @@ async def lifespan(app: FastAPI):
     if settings.CONSUL_ENABLED and consul.is_healthy():
         logger.info(f"Consul 已连接: {settings.CONSUL_HOST}:{settings.CONSUL_PORT}")
 
-    # ✅ 启动健康检查服务（从 Redis 读取已注册的服务）
+    # 启动健康检查服务（从 Redis 读取已注册的服务）
     from app.services.health_checker import HealthChecker
     health_checkers = []
     
@@ -89,10 +89,10 @@ async def lifespan(app: FastAPI):
                     )
                     task = asyncio.create_task(checker.start_health_check())
                     health_checkers.append((checker, task))
-                    logger.info(f"✅ 已启动服务 [{service_name}] 的健康检查")
+                    logger.info(f" 已启动服务 [{service_name}] 的健康检查")
         
         if not health_checkers:
-            logger.info("ℹ️  暂无已注册的服务，健康检查未启动")
+            logger.info("ℹ 暂无已注册的服务，健康检查未启动")
     except Exception as e:
         logger.warning(f"启动健康检查服务失败: {e}")
 
@@ -101,7 +101,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # 关闭时
-    # ✅ 停止健康检查服务
+    # 停止健康检查服务
     for checker, task in health_checkers:
         task.cancel()
         try:
@@ -110,7 +110,7 @@ async def lifespan(app: FastAPI):
             pass
     
     await HTTPClientManager.close()
-    await close()  # ✅ 使用模块级 close 函数
+    await close()  #  使用模块级 close 函数
     if settings.CONSUL_ENABLED:
         await consul.close()
     logger.info("Gateway 已停止")
@@ -150,18 +150,18 @@ async def proxy(request: Request, path: str):
 
 
 if __name__ == "__main__":
-    # ✅ 根据配置决定是否启用 HTTPS
+    #  根据配置决定是否启用 HTTPS
     ssl_certfile = None
     ssl_keyfile = None
     
     if settings.HTTPS_ENABLED:
         if not settings.SSL_CERT_PATH or not settings.SSL_KEY_PATH:
-            logger.warning("⚠️  HTTPS 已启用但未配置 SSL 证书路径，将使用 HTTP")
+            logger.warning("HTTPS 已启用但未配置 SSL 证书路径，将使用 HTTP")
             logger.warning("   请在 .env 文件中配置 SSL_CERT_PATH 和 SSL_KEY_PATH")
         else:
             ssl_certfile = settings.SSL_CERT_PATH
             ssl_keyfile = settings.SSL_KEY_PATH
-            logger.info(f"✅ HTTPS 已启用 - 证书: {settings.SSL_CERT_PATH}")
+            logger.info(f"HTTPS 已启用 - 证书: {settings.SSL_CERT_PATH}")
     
     uvicorn.run(
         "main:app",
@@ -169,6 +169,6 @@ if __name__ == "__main__":
         port=settings.PORT,
         reload=settings.DEBUG,
         log_level="info",
-        ssl_certfile=ssl_certfile,  # ✅ 显式传递 SSL 参数
+        ssl_certfile=ssl_certfile,  # 显式传递 SSL 参数
         ssl_keyfile=ssl_keyfile
     )

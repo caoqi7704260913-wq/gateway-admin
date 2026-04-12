@@ -25,7 +25,7 @@ class HealthChecker:
         self.redis_manager = get_redis_manager()
         self.consul_manager = get_consul_manager()
         self.http_client = get_http_client()
-        self._running = False  # ✅ 添加运行状态标志
+        self._running = False  # 添加运行状态标志
 
     async def _get_healthy_services(self, service_name: str) -> list[ServiceBase]:
         """
@@ -89,10 +89,10 @@ class HealthChecker:
         """
         启动健康检查循环
         """
-        self._running = True  # ✅ 设置运行状态
+        self._running = True  # 设置运行状态
         logger.info(f"Health checker started for service: {self.name}")
         
-        while self._running:  # ✅ 使用运行状态控制循环
+        while self._running:  # 使用运行状态控制循环
             try:
                 # 获取所有服务实例
                 services = await self._get_healthy_services(self.name)
@@ -109,7 +109,7 @@ class HealthChecker:
             except Exception as e:
                 logger.error(f"Error during health check: {e}")
             
-            # ✅ 使用 wait_for 支持快速退出
+            # 使用 wait_for 支持快速退出
             try:
                 await asyncio.wait_for(asyncio.sleep(self.interval), timeout=self.interval)
             except asyncio.TimeoutError:
@@ -118,7 +118,7 @@ class HealthChecker:
         logger.info(f"Health checker stopped for service: {self.name}")
 
     async def stop(self):
-        """✅ 停止健康检查"""
+        """停止健康检查"""
         self._running = False
         logger.info(f"Stopping health checker for service: {self.name}")
 
@@ -153,6 +153,15 @@ class HealthChecker:
                 
                 if settings.CONSUL_ENABLED:
                     self.consul_manager.deregister_service(service_instance.id)
+                
+                # 清理本地缓存（保持3级缓存一致性）
+                from app.services.discovery import get_service_discovery
+                discovery = get_service_discovery()
+                cache_key = discovery._cache_key(service_instance.name, service_instance.id)
+                if cache_key in discovery._local_cache:
+                    del discovery._local_cache[cache_key]
+                    discovery._save_local_cache()
+                    logger.debug(f"Removed from local cache: {cache_key}")
             except Exception as e:
                 logger.warning(f"Failed to deregister unhealthy service: {e}")
     

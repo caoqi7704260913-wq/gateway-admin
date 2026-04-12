@@ -101,12 +101,12 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
             return "*" if "*" in origins else ""
 
         if self._is_origin_allowed(origin):
-            # ✅ 当启用凭证时，不能返回通配符，必须返回具体 origin
+            # 当启用凭证时，不能返回通配符，必须返回具体 origin
             if "*" in origins and not credentials:
                 return "*"
             return origin
 
-        # ✅ Origin 不被允许时，不设置 CORS 头（而不是返回 "null"）
+        # Origin 不被允许时，不设置 CORS 头（而不是返回 "null"）
         return ""
 
     async def dispatch(self, request: Request, call_next):
