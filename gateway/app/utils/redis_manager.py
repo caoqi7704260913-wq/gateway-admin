@@ -41,7 +41,7 @@ def _init_standalone():
         port=settings.REDIS_PORT,
         db=settings.REDIS_DB,
         password=settings.REDIS_PASSWORD if settings.REDIS_PASSWORD else None,
-        max_connections=settings.REDIS_POOL_SIZE,
+        max_connections=min(settings.REDIS_POOL_SIZE, 10),
         decode_responses=settings.REDIS_DECODE_RESPONSES,
         socket_timeout=settings.REDIS_SOCKET_TIMEOUT,
         socket_connect_timeout=settings.REDIS_SOCKET_CONNECT_TIMEOUT,

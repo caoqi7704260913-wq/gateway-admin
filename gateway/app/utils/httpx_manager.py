@@ -46,8 +46,8 @@ class HTTPClientManager:
                 if cls._client is None:
                     # 创建连接池配置
                     limits = httpx.Limits(
-                        max_keepalive_connections=settings.HTTP_MAX_KEEPALIVE,
-                        max_connections=settings.HTTP_MAX_CONNECTIONS
+                        max_keepalive_connections=min(settings.HTTP_MAX_KEEPALIVE, 10),
+                        max_connections=min(settings.HTTP_MAX_CONNECTIONS, 20)
                     )
                     
                     # 创建超时配置
