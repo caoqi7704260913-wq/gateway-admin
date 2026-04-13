@@ -11,10 +11,13 @@ from app.api.routes import router as api_router
 from app.services.register_service import register_service
 from app.services.config_service import config_service
 from app.utils.redis_manager import redis_manager
+from app.utils.consul_manager import consul_manager
 from app.utils.http_client import http_client
 from app.utils.database_pool import db_manager
 from app.utils.fallback_manager import fallback_manager
 from app.middleware.rate_limiter import RateLimiterMiddleware
+from app.middleware.service_auth import ServiceSourceAuthMiddleware
+from app.middleware.audit_log import AuditLogMiddleware
 
 
 @asynccontextmanager
@@ -31,6 +34,13 @@ async def lifespan(app: FastAPI):
     # 2. 初始化 Redis
     await redis_manager.init()
     logger.info("Redis connected")
+    
+    # 2.1 初始化 Consul（可选）
+    consul_manager.init()
+    if settings.CONSUL_ENABLED:
+        logger.info("Consul initialized")
+    else:
+        logger.info("Consul disabled")
     
     # 3. 初始化数据库连接池
     await db_manager.init()
@@ -103,7 +113,20 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# 注册限流中间件（在所有路由之前）
+# 注册中间件（注意：顺序很重要！）
+
+# 1. 服务来源认证（最外层，最先执行）
+#    只接受 Gateway 或已注册服务的请求
+app.add_middleware(
+    ServiceSourceAuthMiddleware,
+    redis_manager=redis_manager,
+    consul_manager=consul_manager
+)
+
+# 2. 操作审计日志（记录敏感操作）
+app.add_middleware(AuditLogMiddleware)
+
+# 3. API 限流（防止滥用）
 app.add_middleware(RateLimiterMiddleware)
 
 # 注册路由

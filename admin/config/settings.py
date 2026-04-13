@@ -41,6 +41,21 @@ class Settings(BaseSettings):
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_PASSWORD: str = "123123"
+    REDIS_DB: int = 0
+    
+    # Redis 集群配置
+    REDIS_CLUSTER_MODE: bool = False
+    REDIS_CLUSTER_NODES: str = ""  # 逗号分隔的节点列表，如 "host1:6379,host2:6379"
+    REDIS_POOL_SIZE: int = 20
+    REDIS_DECODE_RESPONSES: bool = True
+    REDIS_SOCKET_TIMEOUT: int = 5
+    REDIS_SOCKET_CONNECT_TIMEOUT: int = 5
+    
+    # Consul 配置
+    CONSUL_ENABLED: bool = True
+    CONSUL_HOST: str = "localhost"
+    CONSUL_PORT: int = 8500
+    CONSUL_TOKEN: str = ""  # 可选：Consul ACL Token
     
     # Token 配置
     TOKEN_EXPIRATION_MINUTES: int = 60
@@ -49,6 +64,12 @@ class Settings(BaseSettings):
     RATE_LIMIT_ENABLED: bool = True  # 是否启用限流
     RATE_LIMIT_MAX_REQUESTS: int = 100  # 时间窗口内最大请求数
     RATE_LIMIT_WINDOW_SECONDS: int = 60  # 时间窗口大小（秒）
+    
+    # 公开路径白名单（支持通配符 *）
+    PUBLIC_PATHS: str = "/healthz,/docs,/openapi.json,/redoc,/api/auth/*"
+    
+    # 审计日志敏感路径（支持通配符 *）
+    AUDIT_SENSITIVE_PATHS: str = "/api/admins/*,/api/roles/*,/api/permissions/*,/api/menus/*,/api/config/*"
     
     # 初始化配置
     INIT_DEFAULT_DATA: bool = False  # 是否初始化默认数据（管理员、角色、权限等）
