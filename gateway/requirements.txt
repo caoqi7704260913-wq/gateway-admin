@@ -16,5 +16,13 @@ redis>=5.2.0
 # HTTP 客户端
 httpx>=0.28.0
 
+# Consul 服务发现
+python-consul>=1.1.0
+
 # 日志
 loguru>=0.7.0
+
+# 测试（可选）
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+requests>=2.31.0
