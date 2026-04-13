@@ -1,8 +1,13 @@
 """
 应用配置
 """
+import os
 from typing import Union
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+# 项目根目录
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class Settings(BaseSettings):
@@ -24,7 +29,7 @@ class Settings(BaseSettings):
     SERVICE_DESCRIPTION: str = "后台管理服务"
     
     # Gateway 配置
-    GATEWAY_URL: str = "http://localhost:8000"
+    GATEWAY_URL: str = "http://localhost:9000"
     SERVICE_TTL: int = 300
 
     # 数据库配置
@@ -39,6 +44,14 @@ class Settings(BaseSettings):
     
     # Token 配置
     TOKEN_EXPIRATION_MINUTES: int = 60
+    
+    # 限流配置
+    RATE_LIMIT_ENABLED: bool = True  # 是否启用限流
+    RATE_LIMIT_MAX_REQUESTS: int = 100  # 时间窗口内最大请求数
+    RATE_LIMIT_WINDOW_SECONDS: int = 60  # 时间窗口大小（秒）
+    
+    # 初始化配置
+    INIT_DEFAULT_DATA: bool = False  # 是否初始化默认数据（管理员、角色、权限等）
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -2,12 +2,20 @@
 数据库初始化和迁移
 """
 import asyncio
-from app.database_pool import db_manager
+from app.utils.database_pool import db_manager
 
 
-def create_db_and_tables():
-    """创建数据库表"""
-    db_manager.create_tables()
+async def init_db():
+    """初始化数据库连接池"""
+    await db_manager.init()
+
+
+async def create_db_and_tables():
+    """创建数据库表（异步）"""
+    # 必须先导入所有模型，这样 SQLModel.metadata 才会包含表定义
+    from app.models.schemas import Admin, Role, Permission, Menu, AdminRole, RolePermission, Token
+    
+    await db_manager.create_tables_async()
     print("数据库表创建完成")
 
 
@@ -84,5 +92,6 @@ async def init_default_data():
 
 
 if __name__ == "__main__":
+    asyncio.run(init_db())
     create_db_and_tables()
     asyncio.run(init_default_data())

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from app.services.auth_service import auth_service
 from app.services.token_service import token_service
 from app.services.config_service import config_service
-from app.database_pool import get_db_async
+from app.utils.database_pool import get_db_async
 
 router = APIRouter()
 
