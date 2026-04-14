@@ -66,11 +66,11 @@ class ServiceSourceAuthMiddleware(BaseHTTPMiddleware):
             # 例如：Gateway → Admin Service，Gateway 使用 admin-service 的密钥签名
             #       Admin Service 验证时也使用自己的密钥
             current_service_name = settings.SERVICE_NAME
-            if self._verify_hmac_signature(request, current_service_name):
+            if await self._verify_hmac_signature(request, current_service_name):
                 is_from_gateway = True
-                logger.debug(f"✅ Gateway access verified with valid signature")
+                logger.debug(f"Gateway access verified with valid signature")
             else:
-                logger.warning(f"🚫 Gateway access denied: invalid signature from {client_host}")
+                logger.warning(f" Gateway access denied: invalid signature from {client_host}")
                 return JSONResponse(
                     status_code=403,
                     content={
@@ -82,7 +82,7 @@ class ServiceSourceAuthMiddleware(BaseHTTPMiddleware):
         elif service_name_header:
             # 内部服务请求：验证服务注册状态 + HMAC 签名
             if await self._is_from_registered_service(service_name_header, client_host):
-                if self._verify_hmac_signature(request, service_name_header):
+                if await self._verify_hmac_signature(request, service_name_header):
                     is_from_registered_service = True
                     logger.debug(f"✅ Service '{service_name_header}' access verified with valid signature")
                 else:
@@ -141,7 +141,7 @@ class ServiceSourceAuthMiddleware(BaseHTTPMiddleware):
         """
         return is_public_path(path, self.public_patterns)
     
-    def _verify_hmac_signature(self, request: Request, service_name: str) -> bool:
+    async def _verify_hmac_signature(self, request: Request, service_name: str) -> bool:
         """
         验证 HMAC 签名
         
@@ -171,7 +171,7 @@ class ServiceSourceAuthMiddleware(BaseHTTPMiddleware):
             return False
         
         # 从 Redis 获取 HMAC Key
-        hmac_key = self._get_hmac_key(service_name)
+        hmac_key = await self._get_hmac_key(service_name)
         if not hmac_key:
             logger.error(f"HMAC key not found for service: {service_name}")
             return False
@@ -196,7 +196,7 @@ class ServiceSourceAuthMiddleware(BaseHTTPMiddleware):
         
         return is_valid
     
-    def _get_hmac_key(self, service_name: str) -> Optional[str]:
+    async def _get_hmac_key(self, service_name: str) -> Optional[str]:
         """
         从 Redis 获取服务的 HMAC Key
         
@@ -211,20 +211,9 @@ class ServiceSourceAuthMiddleware(BaseHTTPMiddleware):
             return None
         
         try:
-            import asyncio
-            
-            # 异步获取
-            async def get_key():
-                key = await self.redis.get(f"config:hmac:{service_name}")
-                return key
-            
-            # 在同步上下文中运行异步代码
-            loop = asyncio.new_event_loop()
-            try:
-                hmac_key = loop.run_until_complete(get_key())
-                return hmac_key
-            finally:
-                loop.close()
+            # 直接从 Redis 获取（现在是异步方法）
+            hmac_key = await self.redis.get(f"config:hmac:{service_name}")
+            return hmac_key
         
         except Exception as e:
             logger.error(f"Failed to get HMAC key from Redis: {e}")

@@ -112,7 +112,7 @@ class ConfigService:
         
         # 2. 降级：从 Consul 获取
         try:
-            if consul_manager.is_available():
+            if consul_manager.client:  # 检查 client 是否存在
                 consul_path = f"config/hmac/{app_id}"
                 hmac_key = consul_manager.get_kv(consul_path)
                 if hmac_key:
@@ -159,7 +159,7 @@ class ConfigService:
         
         # 2. 写入 Consul（降级备份）
         try:
-            if consul_manager.is_available():
+            if consul_manager.client:  # 检查 client 是否存在
                 consul_path = f"config/hmac/{app_id}"
                 consul_success = consul_manager.set_kv(consul_path, secret_key)
                 if consul_success:

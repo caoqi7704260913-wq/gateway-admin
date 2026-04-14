@@ -42,6 +42,7 @@ class HMACMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         """处理请求"""
+        
         # 1. 检查是否需要验证
         if self._is_excluded(request.url.path):
             return await call_next(request)

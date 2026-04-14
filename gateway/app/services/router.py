@@ -64,8 +64,11 @@ class Router:
             # 如果没有密钥，使用默认密钥（仅开发环境）
             hmac_key = "default-dev-key-change-in-production"
         
-        # 生成时间戳
-        timestamp = str(time.time())
+        with open('d:/python_project/gateway/router_debug.log', 'a', encoding='utf-8') as f:
+            f.write(f"   HMAC Key (first 8): {hmac_key[:8]}...\n")
+        
+        # 生成时间戳（使用整数，与 Admin 期望的格式一致）
+        timestamp = str(int(time.time()))
         
         # 构建签名字符串
         message = f"{method}:{path}:{timestamp}"
@@ -173,6 +176,7 @@ class Router:
         
         规则：/service-name/path -> service-name
         例如：/user/api/v1 -> user
+              /api/auth/login -> admin-service (特殊规则)
         
         Args:
             path: 请求路径
@@ -185,10 +189,14 @@ class Router:
         
         # 第一段作为服务名
         parts = path.split("/")
-        if parts and parts[0]:
-            return parts[0]
+        if not parts or not parts[0]:
+            return None
         
-        return None
+        # 特殊规则：/api/* 映射到 admin-service
+        if parts[0] == "api":
+            return "admin-service"
+        
+        return parts[0]
     
     async def _forward(self, request: Request, backend, service_name: str) -> Response:
         """
@@ -205,7 +213,7 @@ class Router:
         cb = self._get_circuit_breaker(service_name)
 
         try:
-            return await cb.execute(self._do_forward, request, backend)
+            return await cb.execute(self._do_forward, request, backend, service_name)
         except CircuitOpenError:
             return JSONResponse(
                 status_code=503,
@@ -222,7 +230,7 @@ class Router:
                 content={"error": "Bad gateway", "detail": str(e)}
             )
 
-    async def _do_forward(self, request: Request, backend) -> Response:
+    async def _do_forward(self, request: Request, backend, service_name: str) -> Response:
         """
         执行请求转发
 
@@ -236,7 +244,13 @@ class Router:
         # 构建目标 URL（正确处理路径）
         base_url = backend.url.rstrip("/")
         path = request.url.path.lstrip("/")
-        remaining_path = "/".join(path.split("/")[1:]) if "/" in path else ""
+        
+        # 特殊处理：/api/* -> /api/v1/* （Admin 服务的路由前缀）
+        if service_name == "admin-service" and path.startswith("api/"):
+            remaining_path = "api/v1/" + "/".join(path.split("/")[1:])
+        else:
+            # 默认：去掉第一段路径
+            remaining_path = "/".join(path.split("/")[1:]) if "/" in path else ""
         
         # 避免双斜杠
         if remaining_path:
@@ -246,6 +260,15 @@ class Router:
 
         # 构建请求头
         headers = dict(request.headers)
+        
+        # ⚠️ 重要：删除前端传来的签名相关 headers，避免与后端服务的签名冲突
+        headers.pop('x-signature', None)
+        headers.pop('X-Signature', None)
+        headers.pop('x-timestamp', None)
+        headers.pop('X-Timestamp', None)
+        headers.pop('x-nonce', None)
+        headers.pop('X-Nonce', None)
+        
         headers["X-Forwarded-For"] = request.client.host if request.client else ""
         headers["X-Forwarded-Host"] = request.headers.get("host", "")
         headers["X-Forwarded-Proto"] = request.url.scheme
@@ -254,11 +277,18 @@ class Router:
         
         # 添加内部服务通信标识和 HMAC 签名
         headers["X-Forwarded-By"] = "gateway"
+        
+        # 计算转发后的路径（用于生成签名）
+        forwarded_path = target_url.replace(base_url, "")
+        if not forwarded_path.startswith("/"):
+            forwarded_path = "/" + forwarded_path
+        
         signature, timestamp = await self._generate_hmac_signature(
             method=request.method,
-            path=request.url.path,
+            path=forwarded_path,  # 使用转发后的路径
             target_service=service_name
         )
+        
         headers["X-Signature"] = signature
         headers["X-Timestamp"] = timestamp
 

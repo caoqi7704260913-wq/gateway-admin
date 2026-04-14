@@ -51,6 +51,36 @@ async def lifespan(app: FastAPI):
     config_manager = get_config_manager()
     await config_manager.load_configs()
 
+    # 初始化 Gateway 的 HMAC 密钥（如果不存在）
+    import secrets
+    redis = get_redis_manager()
+    gateway_key = await redis.get("config:hmac:gateway")
+    if not gateway_key:
+        # 优先使用 .env 中的密钥，如果没有则生成新的
+        new_key = settings.HMAC_SECRET_KEY or secrets.token_urlsafe(32)
+        
+        if not settings.HMAC_SECRET_KEY:
+            logger.warning("⚠️  .env 中未配置 HMAC_SECRET_KEY，已自动生成新密钥")
+        else:
+            logger.info("✅ 使用 .env 中的 HMAC_SECRET_KEY")
+        
+        await redis.set("config:hmac:gateway", new_key)
+        logger.info(f"Gateway HMAC 密钥已存储到 Redis")
+        
+        # 同时写入 Consul
+        try:
+            consul = get_consul_manager()
+            if consul.is_healthy():
+                consul.client.kv.put("config/hmac/gateway", new_key)
+                logger.info(f"Gateway HMAC 密钥已同步到 Consul")
+        except Exception as e:
+            logger.warning(f"⚠️  写入 Consul 失败: {e}")
+        
+        # 重新加载配置
+        await config_manager.load_configs()
+    else:
+        logger.debug("Gateway HMAC 密钥已存在")
+
     consul = get_consul_manager()
     if settings.CONSUL_ENABLED and consul.is_healthy():
         logger.info(f"Consul 已连接: {settings.CONSUL_HOST}:{settings.CONSUL_PORT}")
@@ -145,6 +175,9 @@ async def proxy(request: Request, path: str):
     
     将请求转发到对应的后端服务
     """
+    print(f"\n🔀 [Gateway Proxy] Received request: {request.method} /{path}")
+    logger.info(f"🔀 [Gateway Proxy] Received request: {request.method} /{path}")
+    
     router = get_router()
     return await router.route(request)
 

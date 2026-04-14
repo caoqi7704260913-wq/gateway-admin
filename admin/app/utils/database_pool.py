@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, pool
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel, Session
-from contextlib import contextmanager, asynccontextmanager
+from contextlib import contextmanager
 from config import settings
 
 
@@ -126,8 +126,10 @@ def get_db() -> Generator[Session, None, None]:
         yield session
 
 
-@asynccontextmanager
 async def get_db_async() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI 依赖注入用的异步数据库会话"""
     async with db_manager.AsyncSessionLocal() as session:
-        yield session
+        try:
+            yield session
+        finally:
+            await session.close()

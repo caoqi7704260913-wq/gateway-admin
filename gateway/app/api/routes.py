@@ -31,6 +31,7 @@ router = APIRouter()
 
 class ServiceRegisterRequest(BaseModel):
     """服务注册请求"""
+    id: Optional[str] = None  # 可选的服务 ID，如果不提供则自动生成
     name: str
     host: str
     port: int
@@ -88,16 +89,23 @@ async def register_service(req: ServiceRegisterRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    service = ServiceBase(
-        name=name,
-        host=host,
-        ip=ip,
-        port=port,
-        url=url or f"http://{host}:{port}",
-        weight=weight,
-        metadata=req.metadata or {},
-        status="healthy"
-    )
+    # 准备服务数据
+    service_data = {
+        "name": name,
+        "host": host,
+        "ip": ip,
+        "port": port,
+        "url": url or f"http://{host}:{port}",
+        "weight": weight,
+        "metadata": req.metadata or {},
+        "status": "healthy"
+    }
+    
+    # 如果客户端提供了 ID，则使用；否则让 ServiceBase 自动生成
+    if req.id:
+        service_data["id"] = req.id
+    
+    service = ServiceBase(**service_data)
 
     discovery = get_service_discovery()
     success = await discovery.register_service(service)

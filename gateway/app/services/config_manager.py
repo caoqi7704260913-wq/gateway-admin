@@ -144,6 +144,8 @@ class ConfigManager:
         try:
             value = await self.redis.get(key)
             if value:
+                # 保存到本地缓存
+                self._cache_set(key, value)
                 return value
         except Exception as e:
             logger.error(f"从 Redis 获取 HMAC 密钥失败: {e}")
@@ -156,6 +158,8 @@ class ConfigManager:
                 if data and data.get('Value'):
                     value = data['Value'].decode('utf-8') if isinstance(data['Value'], bytes) else data['Value']
                     logger.debug(f"HMAC 密钥从 Consul 获取: {app_id}")
+                    # 保存到本地缓存
+                    self._cache_set(key, value)
                     return value
             except Exception as e:
                 logger.warning(f"从 Consul 获取 HMAC 密钥失败: {e}")
@@ -245,7 +249,10 @@ class ConfigManager:
                 if data and data.get('Value'):
                     value = data['Value'].decode('utf-8') if isinstance(data['Value'], bytes) else data['Value']
                     logger.debug("CORS配置从 Consul 读取")
-                    return json.loads(value)
+                    config = json.loads(value)
+                    # 保存到本地缓存
+                    self._cache_set(self.CORS_CONFIG_KEY, value)
+                    return config
             except Exception as e:
                 logger.warning(f"从 Consul 读取 CORS 配置失败: {e}")
         
@@ -253,6 +260,8 @@ class ConfigManager:
         try:
             data = await self.redis.get(self.CORS_CONFIG_KEY)
             if data:
+                # 保存到本地缓存
+                self._cache_set(self.CORS_CONFIG_KEY, data)
                 return json.loads(data)
         except Exception as e:
             logger.error(f"从 Redis 获取 CORS 配置失败: {e}")
@@ -410,6 +419,9 @@ class ConfigManager:
 
         # 加载 HMAC 密钥
         hmac_keys = await self.list_hmac_keys()
+        for app_id in hmac_keys:
+            # 调用 get_hmac_key 会自动保存到本地缓存
+            await self.get_hmac_key(app_id)
         logger.info(f"HMAC 密钥已加载: {len(hmac_keys)} 个")
 
         # 启动 Consul 监听
