@@ -109,9 +109,54 @@ def generate_signature(method: str, path: str, body: str, secret_key: str):
 
 ---
 
-### 3. 服务发现与注册
+### 3. API 路由规范
 
-#### 3.1 3级缓存策略
+**原则**：统一的路由命名规则，Gateway 不做路径转换。
+
+**路由格式**：
+```
+/{service-name}/api/{version}/{resource}
+```
+
+**示例**：
+- Admin 服务：`/admin/api/auth/login`
+- User 服务：`/user/api/users/profile`
+- Order 服务：`/order/api/orders/list`
+
+**Gateway 转发规则**：
+1. 提取第一段作为服务名（如 `/admin/...` → `admin-service`）
+2. 去掉服务名前缀，剩余路径直接转发
+3. **不做任何路径转换或重写**
+
+**前端调用**：
+```typescript
+// ✅ 正确：完整的服务路由
+axios.get('/admin/api/auth/login')
+axios.get('/user/api/users/profile')
+
+// ❌ 错误：省略服务名
+axios.get('/api/auth/login')
+```
+
+**后端服务配置**：
+```python
+# Admin Service main.py
+app.include_router(api_router, prefix="/api")
+# 实际路由：/api/auth/login
+# Gateway 转发：/admin/api/auth/login → /api/auth/login ✅
+```
+
+**优势**：
+- ✅ 统一规范，易于理解
+- ✅ Gateway 无硬编码逻辑
+- ✅ 支持多版本 API（v1, v2...）
+- ✅ 服务间调用路径清晰
+
+---
+
+### 4. 服务发现与注册
+
+#### 4.1 3级缓存策略
 
 **查询优先级**：
 1. **本地缓存**（最快，TTL: 60秒）
@@ -146,7 +191,7 @@ async def get_service_instances(service_name: str):
     raise ServiceUnavailableError(service_name)
 ```
 
-#### 3.2 服务注册
+#### 4.2 服务注册
 
 **注册流程**：
 1. 生成固定服务 ID（MD5: name+ip+port）
@@ -162,7 +207,7 @@ async def get_service_instances(service_name: str):
 
 ---
 
-### 4. 零信任安全策略
+### 5. 零信任安全策略
 
 **原则**：所有内部服务调用都必须验证来源
 
@@ -195,7 +240,7 @@ return False  # ❌ 拒绝访问
 
 ---
 
-### 5. 多层防护体系
+### 6. 多层防护体系
 
 **Admin 服务安全防护（6层）**：
 
@@ -209,6 +254,42 @@ return False  # ❌ 拒绝访问
 ---
 
 ## 🔧 开发规范
+
+### 0. 禁止硬编码原则（最高优先级）
+
+**核心原则**：所有配置、路径、密钥、服务名等必须通过配置文件或环境变量管理，严禁在代码中硬编码。
+
+**禁止硬编码的内容**：
+- ❌ 服务名称、IP 地址、端口号
+- ❌ HMAC 密钥、密码、Token
+- ❌ API 路径、路由规则
+- ❌ 数据库连接字符串
+- ❌ Redis/Consul 配置
+- ❌ CORS 源列表
+- ❌ 超时时间、重试次数等业务参数
+
+**正确做法**：
+```python
+# ✅ 从配置文件读取
+from config import settings
+service_name = settings.SERVICE_NAME
+hmac_key = await redis.get(f"config:hmac:{service_name}")
+
+# ❌ 硬编码
+service_name = "admin-service"
+hmac_key = "hardcoded-key-12345"
+```
+
+**例外情况**：
+- 单元测试中的 Mock 数据
+- 示例代码中的占位符（需明确标注）
+
+**违规后果**：
+- 降低代码可维护性
+- 增加安全风险（密钥泄露）
+- 阻碍多环境部署（开发/测试/生产）
+
+---
 
 ### 1. 新增后端服务
 

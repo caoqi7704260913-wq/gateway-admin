@@ -76,12 +76,18 @@ class HealthChecker:
         if service_instance.url:
             if service_instance.url.startswith("https"):
                 protocol = "https"
-        url = f"{protocol}://{service_instance.host}:{service_instance.port}/healthz"
+        
+        # 使用 ip 而非 host（host 可能是 0.0.0.0）
+        target_host = service_instance.ip if hasattr(service_instance, 'ip') and service_instance.ip else service_instance.host
+        url = f"{protocol}://{target_host}:{service_instance.port}/healthz"
         try:
+            logger.info(f"Checking health: {url}")
             response = await self.http_client.get(url, timeout=5)
+            logger.info(f"Health check result: {response.status_code}")
             return response.status_code == 200
         except Exception as e:
             logger.error(f"Failed to check health of service {service_instance.name}: {e}")
+            logger.error(f"URL: {url}, Exception type: {type(e).__name__}")
             return False
         
     
@@ -91,6 +97,9 @@ class HealthChecker:
         """
         self._running = True  # 设置运行状态
         logger.info(f"Health checker started for service: {self.name}")
+        
+        # 首次检查前等待 3 秒，给服务启动时间
+        #await asyncio.sleep(3)
         
         while self._running:  # 使用运行状态控制循环
             try:

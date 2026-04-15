@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     
     # 服务配置
     SERVICE_NAME: str = "admin-service"
-    SERVICE_IP: str = "localhost"
+    SERVICE_IP: str = "127.0.0.1"
     SERVICE_WEIGHT: int = 1
     SERVICE_TAGS: str = "admin,management"
     SERVICE_DESCRIPTION: str = "后台管理服务"
@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     CONSUL_HOST: str = "localhost"
     CONSUL_PORT: int = 8500
     CONSUL_TOKEN: str = ""  # 可选：Consul ACL Token
+    
+    # Consul 集群配置
+    CONSUL_CLUSTER_MODE: bool = False
+    CONSUL_CLUSTER_NODES: str = ""  # 逗号分隔的节点列表，如 "host1:8500,host2:8500"
     
     # Token 配置
     TOKEN_EXPIRATION_MINUTES: int = 60

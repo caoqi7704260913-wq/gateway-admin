@@ -15,15 +15,28 @@ class WhitelistConfig(BaseModel):
 
 
 import uuid
+import hashlib
 
-def generate_service_id() -> str:
-    """生成服务实例唯一标识"""
-    return f"{uuid.getnode():012x}-{uuid.uuid4().hex[:8]}"
+def generate_service_id(name: str, ip: str, port: int, weight: int = 1) -> str:
+    """
+    生成服务实例唯一标识
+    
+    Args:
+        name: 服务名称
+        ip: 服务IP
+        port: 服务端口
+        weight: 权重
+        
+    Returns:
+        基于 name+ip+port+weight 的 MD5 哈希值
+    """
+    content = f"{name}:{ip}:{port}:{weight}"
+    return hashlib.md5(content.encode('utf-8')).hexdigest()
 
 
 class ServiceBase(BaseModel):
     """服务实例基础数据模型"""
-    id: str = Field(default_factory=generate_service_id, description="服务实例唯一标识")
+    id: str = Field(..., description="服务实例唯一标识")
     host: str = Field(..., description="服务实例所在主机")
     name: str = Field(..., description="服务名称")
     url: str = Field(..., description="服务地址")

@@ -19,13 +19,13 @@ export interface LoginResponse {
 }
 
 export const login = (data: LoginData) => {
-  return request.post('/api/auth/login', data) as any as Promise<LoginResponse>
+  return request.post('/admin-service/api/auth/login', data) as any as Promise<LoginResponse>
 }
 
 export const logout = () => {
-  return request.post('/api/auth/logout')
+  return request.post('/admin-service/api/auth/logout')
 }
 
 export const getUserInfo = () => {
-  return request.get('/api/auth/userinfo') as any as Promise<UserInfo>
+  return request.get('/admin-service/api/auth/userinfo') as any as Promise<UserInfo>
 }

@@ -43,6 +43,10 @@ class HMACMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         """处理请求"""
         
+        # 0. CORS 预检请求（OPTIONS）直接放行
+        if request.method == "OPTIONS":
+            return await call_next(request)
+        
         # 1. 检查是否需要验证
         if self._is_excluded(request.url.path):
             return await call_next(request)

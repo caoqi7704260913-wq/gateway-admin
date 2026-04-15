@@ -175,8 +175,8 @@ class Router:
         路径匹配：提取服务名称
         
         规则：/service-name/path -> service-name
-        例如：/user/api/v1 -> user
-              /api/auth/login -> admin-service (特殊规则)
+        例如：/admin-service/api/auth/login -> admin-service
+              /user-service/api/v1 -> user-service
         
         Args:
             path: 请求路径
@@ -191,10 +191,6 @@ class Router:
         parts = path.split("/")
         if not parts or not parts[0]:
             return None
-        
-        # 特殊规则：/api/* 映射到 admin-service
-        if parts[0] == "api":
-            return "admin-service"
         
         return parts[0]
     
@@ -241,16 +237,12 @@ class Router:
         Returns:
             后端响应
         """
-        # 构建目标 URL（正确处理路径）
+        # 构建目标 URL（不做路径转换，保持原路径）
         base_url = backend.url.rstrip("/")
         path = request.url.path.lstrip("/")
         
-        # 特殊处理：/api/* -> /api/v1/* （Admin 服务的路由前缀）
-        if service_name == "admin-service" and path.startswith("api/"):
-            remaining_path = "api/v1/" + "/".join(path.split("/")[1:])
-        else:
-            # 默认：去掉第一段路径
-            remaining_path = "/".join(path.split("/")[1:]) if "/" in path else ""
+        # 去掉第一段路径（服务名）
+        remaining_path = "/".join(path.split("/")[1:]) if "/" in path else ""
         
         # 避免双斜杠
         if remaining_path:

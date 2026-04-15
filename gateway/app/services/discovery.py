@@ -111,8 +111,9 @@ class ServiceDiscovery:
             redis_ok = True
         except Exception as e:
             logger.error(f"Failed to register service in Redis: {e}")
+            # Redis 失败时，记录日志但继续尝试 Consul
         
-        # 2. 注册到 Consul
+        # 2. 注册到 Consul (如果 Redis 失败，Consul 将作为主存储)
         if settings.CONSUL_ENABLED:
             try:
                 tags = service.metadata.get("tags", []) if service.metadata else []
@@ -135,6 +136,8 @@ class ServiceDiscovery:
                 )
                 if consul_ok:
                     logger.info(f"Service registered in Consul: {service.name} (ID: {service.id})")
+                else:
+                    logger.warning(f"Consul registration returned False for: {service.name}")
             except Exception as e:
                 logger.error(f"Failed to register service in Consul: {e}")
         

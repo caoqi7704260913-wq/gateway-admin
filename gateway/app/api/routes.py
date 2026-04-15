@@ -101,9 +101,9 @@ async def register_service(req: ServiceRegisterRequest):
         "status": "healthy"
     }
     
-    # 如果客户端提供了 ID，则使用；否则让 ServiceBase 自动生成
-    if req.id:
-        service_data["id"] = req.id
+    # 生成基于 name+ip+port+weight 的唯一 ID
+    from app.models.service import generate_service_id
+    service_data["id"] = generate_service_id(name, ip, port, weight)
     
     service = ServiceBase(**service_data)
 

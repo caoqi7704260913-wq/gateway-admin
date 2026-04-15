@@ -376,13 +376,16 @@ class ConfigManager:
         初始化默认 CORS 配置
 
         Args:
-            origins: 默认源列表
+            origins: 默认源列表（不提供则从 .env 读取）
 
         Returns:
             是否初始化成功
         """
         if origins is None:
-            origins = ["http://localhost:9527", "http://127.0.0.1:9527"]
+            # 从环境变量读取 CORS_ORIGINS 配置
+            from config.settings import settings
+            origins = settings.CORS_ORIGINS
+            logger.info(f"使用 .env 中的 CORS_ORIGINS: {origins}")
 
         default_config = {
             "origins": origins,
@@ -410,12 +413,15 @@ class ConfigManager:
             update_cors_cache(cors_config)
             logger.info(f"CORS 配置已加载: {len(cors_config.get('origins', []))} 个源")
         else:
-            # 使用默认配置
+            # 使用默认配置并强制写入 Redis/Consul
+            logger.info("Redis/Consul 中无 CORS 配置，正在初始化默认配置...")
             await self.init_default_cors()
             cors_config = await self.get_cors_config()
             if cors_config:
                 update_cors_cache(cors_config)
-            logger.info("CORS 使用默认配置")
+                logger.info(f"默认 CORS 配置已加载并同步: {len(cors_config.get('origins', []))} 个源")
+            else:
+                logger.warning("CORS 配置初始化失败，使用本地兜底")
 
         # 加载 HMAC 密钥
         hmac_keys = await self.list_hmac_keys()

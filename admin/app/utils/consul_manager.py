@@ -23,7 +23,7 @@ class ConsulManager:
         return cls._instance
     
     def init(self):
-        """初始化 Consul 客户端"""
+        """初始化 Consul 客户端（支持单节点和集群模式）"""
         if self._initialized:
             return
         
@@ -32,16 +32,41 @@ class ConsulManager:
             return
         
         try:
+            # 检查是否启用集群模式
+            if hasattr(settings, 'CONSUL_CLUSTER_MODE') and settings.CONSUL_CLUSTER_MODE:
+                nodes_str = getattr(settings, 'CONSUL_CLUSTER_NODES', '')
+                if not nodes_str:
+                    raise ValueError("CONSUL_CLUSTER_NODES is required when CONSUL_CLUSTER_MODE is True")
+                
+                # 解析节点列表
+                nodes = [node.strip() for node in nodes_str.split(',') if node.strip()]
+                if not nodes:
+                    raise ValueError("No valid nodes found in CONSUL_CLUSTER_NODES")
+                
+                # 使用第一个节点作为主连接点，其他作为备选
+                # python-consul 库本身不直接支持多节点自动故障转移，
+                # 这里我们连接到第一个可用节点
+                primary_node = nodes[0]
+                host, port = primary_node.rsplit(':', 1)
+                port = int(port)
+                
+                logger.info(f"Consul Cluster Mode enabled. Connecting to primary: {primary_node}")
+                logger.info(f"Available nodes: {nodes}")
+            else:
+                host = settings.CONSUL_HOST
+                port = settings.CONSUL_PORT
+            
             self._client = consul.Consul(
-                host=settings.CONSUL_HOST,
-                port=settings.CONSUL_PORT,
+                host=host,
+                port=port,
                 token=settings.CONSUL_TOKEN if settings.CONSUL_TOKEN else None
             )
             
             # 测试连接
             self._client.agent.self()
             self._initialized = True
-            logger.info(f"Consul connected: {settings.CONSUL_HOST}:{settings.CONSUL_PORT}")
+            mode = "Cluster" if (hasattr(settings, 'CONSUL_CLUSTER_MODE') and settings.CONSUL_CLUSTER_MODE) else "Single Node"
+            logger.info(f"Consul connected ({mode}): {host}:{port}")
         
         except Exception as e:
             logger.error(f"Failed to connect to Consul: {e}")
@@ -184,3 +209,8 @@ class ConsulManager:
 
 # 全局实例
 consul_manager = ConsulManager()
+
+
+def get_consul_manager() -> ConsulManager:
+    """获取 Consul 管理器单例"""
+    return consul_manager

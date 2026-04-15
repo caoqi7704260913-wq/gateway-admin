@@ -87,7 +87,7 @@ class RegisterService:
     
     async def _get_hmac_key_from_redis(self) -> bool:
         """
-        从 Redis 获取 HMAC Key
+        从 Redis 获取 HMAC Key（支持 Consul 降级）
         
         Returns:
             是否成功获取
@@ -105,15 +105,40 @@ class RegisterService:
                 return False
         except Exception as e:
             logger.error(f"从 Redis 获取 HMAC Key 失败: {e}")
+            # Redis 失败时，尝试从 Consul 获取（如果配置了）
+            if hasattr(settings, 'CONSUL_ENABLED') and settings.CONSUL_ENABLED:
+                try:
+                    from app.utils.consul_manager import get_consul_manager
+                    consul = get_consul_manager()
+                    key = consul.get_kv(f"config/hmac/{self._app_id}")
+                    if key:
+                        self._hmac_key = key
+                        logger.info(f"从 Consul 降级获取 HMAC Key 成功: {self._app_id}")
+                        return True
+                except Exception as ce:
+                    logger.error(f"从 Consul 获取 HMAC Key 也失败: {ce}")
             return False
     
     async def _create_hmac_key_if_needed(self):
-        """如果 Redis 中没有 HMAC Key，则创建一个新的"""
+        """如果 Redis 中没有 HMAC Key，则创建一个新的（双写 Redis + Consul）"""
         if not self._hmac_key:
             try:
                 import secrets
                 new_key = secrets.token_urlsafe(32)
+                
+                # 1. 写入 Redis
                 await config_service.set_hmac_key(self._app_id, new_key)
+                
+                # 2. 降级写入 Consul
+                if hasattr(settings, 'CONSUL_ENABLED') and settings.CONSUL_ENABLED:
+                    try:
+                        from app.utils.consul_manager import get_consul_manager
+                        consul = get_consul_manager()
+                        consul.set_kv(f"config/hmac/{self._app_id}", new_key)
+                        logger.info(f"HMAC Key 已同步到 Consul")
+                    except Exception as ce:
+                        logger.warning(f"同步 HMAC Key 到 Consul 失败: {ce}")
+                
                 self._hmac_key = new_key
                 logger.info(f"已创建新的 HMAC Key: {self._app_id}")
             except Exception as e:
