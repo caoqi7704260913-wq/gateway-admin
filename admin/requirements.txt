@@ -27,6 +27,9 @@ httpx>=0.28.0
 # 密码加密
 passlib[bcrypt]>=1.7.4
 
+# 验证码
+captcha>=0.7.1
+
 # 日志
 loguru>=0.7.0
 

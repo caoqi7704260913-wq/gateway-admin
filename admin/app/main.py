@@ -12,6 +12,8 @@ from app.api.admin_routes import router as admin_router
 from app.api.role_routes import router as role_router
 from app.api.permission_routes import router as permission_router
 from app.api.menu_routes import router as menu_router
+from app.api.captcha_routes import router as captcha_router
+from app.api.dashboard_routes import router as dashboard_router
 from app.services.register_service import register_service
 from app.services.config_service import config_service
 from app.utils.redis_manager import redis_manager
@@ -139,6 +141,8 @@ app.include_router(admin_router, prefix="/api")
 app.include_router(role_router, prefix="/api")
 app.include_router(permission_router, prefix="/api")
 app.include_router(menu_router, prefix="/api")
+app.include_router(captcha_router, prefix="/api")
+app.include_router(dashboard_router, prefix="/api")
 
 
 # 请求日志中间件

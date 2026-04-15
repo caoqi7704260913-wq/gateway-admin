@@ -9,7 +9,7 @@
               <el-icon class="icon"><User /></el-icon>
             </div>
           </template>
-          <div class="stat-value">1,234</div>
+          <div class="stat-value">{{ stats.total_users.toLocaleString() }}</div>
         </el-card>
       </el-col>
       <el-col :span="6">
@@ -20,7 +20,7 @@
               <el-icon class="icon"><TrendCharts /></el-icon>
             </div>
           </template>
-          <div class="stat-value">567</div>
+          <div class="stat-value">{{ stats.today_visits }}</div>
         </el-card>
       </el-col>
       <el-col :span="6">
@@ -31,7 +31,7 @@
               <el-icon class="icon"><UserFilled /></el-icon>
             </div>
           </template>
-          <div class="stat-value">89</div>
+          <div class="stat-value">{{ stats.online_users }}</div>
         </el-card>
       </el-col>
       <el-col :span="6">
@@ -42,7 +42,7 @@
               <el-icon class="icon"><Bell /></el-icon>
             </div>
           </template>
-          <div class="stat-value">12</div>
+          <div class="stat-value">{{ stats.system_messages }}</div>
         </el-card>
       </el-col>
     </el-row>
@@ -64,9 +64,29 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
+import { getDashboardStats, type DashboardStats } from '@/api/dashboard'
 
 const userStore = useUserStore()
+const stats = ref<DashboardStats>({
+  total_users: 0,
+  today_visits: 0,
+  online_users: 0,
+  system_messages: 0
+})
+
+const loadStats = async () => {
+  try {
+    stats.value = await getDashboardStats()
+  } catch (error) {
+    console.error('获取统计数据失败:', error)
+  }
+}
+
+onMounted(() => {
+  loadStats()
+})
 </script>
 
 <style scoped>

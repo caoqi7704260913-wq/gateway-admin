@@ -45,6 +45,8 @@ async def verify_token(token: str = Depends(get_token)) -> dict:
 class LoginRequest(BaseModel):
     username: str
     password: str
+    captcha_id: Optional[str] = None
+    captcha: Optional[str] = None
 
 
 class UserInfo(BaseModel):
@@ -75,6 +77,19 @@ class HmacKeyRequest(BaseModel):
 @router.post("/auth/login", response_model=LoginResponse)
 async def login(request: LoginRequest, req: Request, session: AsyncSession = Depends(get_db_async)):
     """登录"""
+    # 验证验证码
+    if request.captcha_id and request.captcha:
+        from app.api.captcha_routes import captcha_store
+        
+        if request.captcha_id not in captcha_store:
+            raise HTTPException(status_code=400, detail="验证码已过期或不存在")
+        
+        stored = captcha_store[request.captcha_id]
+        del captcha_store[request.captcha_id]
+        
+        if stored['code'] != request.captcha.lower():
+            raise HTTPException(status_code=400, detail="验证码错误")
+    
     ip = get_client_ip(req)
     success, result, user_info = await auth_service.login(
         request.username, request.password, session, ip=ip
