@@ -48,7 +48,8 @@ class RegisterService:
             "metadata": {
                 "tags": settings.SERVICE_TAGS.split(",") if settings.SERVICE_TAGS else [],
                 "description": settings.SERVICE_DESCRIPTION,
-                "protocol": protocol  # 添加协议信息到元数据
+                "protocol": protocol,  # 添加协议信息到元数据
+                "global_whitelist": [path.strip() for path in settings.HMAC_WHITELIST.split(",") if path.strip()] if settings.HMAC_WHITELIST else []  # HMAC 白名单
             }
         }
         self._registered = False

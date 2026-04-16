@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     SERVICE_TAGS: str = "admin,management"
     SERVICE_DESCRIPTION: str = "后台管理服务"
     
+    # HMAC 白名单配置
+    HMAC_WHITELIST: str = "/api/auth/*,/api/captcha/*"
+    
     # Gateway 配置
     GATEWAY_URL: str = "http://localhost:9000"
     GATEWAY_APP_ID: str = "gateway"  # Gateway 的应用 ID

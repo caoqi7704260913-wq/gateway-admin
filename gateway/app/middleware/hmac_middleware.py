@@ -47,38 +47,42 @@ class HMACMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS":
             return await call_next(request)
         
-        # 1. 检查是否需要验证
+        # 1. 检查是否需要验证（本地白名单 + 服务注册白名单）
         if self._is_excluded(request.url.path):
             return await call_next(request)
+        
+        # 2. 检查服务注册的白名单
+        if await self._check_service_whitelist(request.url.path):
+            return await call_next(request)
 
-        # 2. HMAC 未启用时跳过验证
+        # 3. HMAC 未启用时跳过验证
         if not settings.HMAC_ENABLED:
             return await call_next(request)
 
-        # 3. 获取签名参数
+        # 4. 获取签名参数
         signature = request.headers.get("X-Signature")
         timestamp_str = request.headers.get("X-Timestamp")
         nonce = request.headers.get("X-Nonce")
 
-        # 4. 检查必要参数
+        # 5. 检查必要参数
         if not all([signature, timestamp_str, nonce]):
             return self._error_response(
                 401,
                 "Missing HMAC headers (X-Signature, X-Timestamp, X-Nonce required)"
             )
 
-        # 5. 解析时间戳
+        # 6. 解析时间戳
         timestamp: int
         try:
             timestamp = int(timestamp_str)  # type: ignore[arg-type]
         except ValueError:
             return self._error_response(401, "Invalid timestamp format")
 
-        # 6. 获取请求体
+        # 7. 获取请求体
         body = await request.body()
         body_str = body.decode() if body else ""
 
-        # 7. 验证签名（此时已确认 signature 和 nonce 不为 None）
+        # 8. 验证签名（此时已确认 signature 和 nonce 不为 None）
         validator = get_hmac_validator()
         is_valid, error_msg = await validator.verify_signature(  # 改为异步调用
             signature=signature,  # type: ignore[arg-type]
@@ -93,7 +97,7 @@ class HMACMiddleware(BaseHTTPMiddleware):
             )
             return self._error_response(401, f"HMAC verification failed: {error_msg}")
 
-        # 8. 签名验证通过，继续处理请求
+        # 9. 签名验证通过，继续处理请求
         logger.debug(f"HMAC verified for {request.url.path}")
         return await call_next(request)
 
@@ -103,6 +107,38 @@ class HMACMiddleware(BaseHTTPMiddleware):
             if path.startswith(excluded):
                 return True
         return False
+    
+    async def _check_service_whitelist(self, path: str) -> bool:
+        """检查路径是否在服务注册的白名单中"""
+        try:
+            from app.utils.redis_manager import get_redis_manager
+            redis = get_redis_manager()
+            
+            # 获取所有服务
+            service_keys = await redis.keys("service:*:*")
+            for key in service_keys:
+                service_data = await redis.get(key)
+                if service_data:
+                    import json
+                    service = json.loads(service_data)
+                    whitelist = service.get('metadata', {}).get('global_whitelist', [])
+                    
+                    # 检查路径是否匹配白名单
+                    for pattern in whitelist:
+                        if self._match_path(path, pattern):
+                            logger.debug(f"Path {path} matched whitelist pattern {pattern}")
+                            return True
+        except Exception as e:
+            logger.error(f"Check service whitelist failed: {e}")
+        
+        return False
+    
+    def _match_path(self, path: str, pattern: str) -> bool:
+        """简单路径匹配（支持 * 通配符）"""
+        if pattern.endswith("/*"):
+            prefix = pattern[:-2]
+            return path.startswith(prefix)
+        return path == pattern
 
     def _error_response(self, status_code: int, message: str) -> JSONResponse:
         """返回错误响应"""
