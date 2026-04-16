@@ -81,6 +81,21 @@ async def lifespan(app: FastAPI):
     else:
         logger.debug("Gateway HMAC 密钥已存在")
 
+    # 初始化 HMAC 密钥（如果不存在则生成）
+    from app.services.config_manager import get_config_manager
+    import secrets
+    
+    config_mgr = get_config_manager()
+    existing_key = await config_mgr.get_hmac_key("gateway")
+    if not existing_key:
+        new_key = secrets.token_urlsafe(32)
+        await config_mgr.create_hmac_key("gateway", new_key)
+        logger.info(f"Gateway HMAC 密钥已生成并写入 Redis/Consul: {new_key[:16]}...")
+        print(f"\n⚠️  Gateway HMAC Key: {new_key}")
+        print(f"请配置到客户端 .env: VITE_GATEWAY_HMAC_KEY={new_key}\n")
+    else:
+        logger.debug(f"Gateway HMAC 密钥已存在: {existing_key[:16]}...")
+
     consul = get_consul_manager()
     if settings.CONSUL_ENABLED and consul.is_healthy():
         logger.info(f"Consul 已连接: {settings.CONSUL_HOST}:{settings.CONSUL_PORT}")
