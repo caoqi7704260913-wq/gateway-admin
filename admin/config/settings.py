@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     
     # Gateway 配置
     GATEWAY_URL: str = "http://localhost:9000"
+    GATEWAY_APP_ID: str = "gateway"  # Gateway 的应用 ID
     SERVICE_TTL: int = 300
 
     # 数据库配置

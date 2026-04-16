@@ -25,10 +25,10 @@ DEFAULT_EXCLUDED_PATHS = [
     "/openapi.json",
     
     # 服务注册与发现（内部服务直连 Consul，不走 HTTP）
-    "/api/services/register",   # 服务注册
-    "/api/services/",           # 服务列表和详情
-    "/api/services/heartbeat",  # 心跳检测
-    "/api/services/deregister", # 服务注销
+    #"/api/services/register",   # 服务注册
+    #"/api/services/",           # 服务列表和详情
+    #"/api/services/heartbeat",  # 心跳检测
+    #"/api/services/deregister", # 服务注销
     
     # 内部服务间通信（需要 HMAC 验证，如需关闭请取消注释）
     # "/api/internal/",         # 内部服务间通信

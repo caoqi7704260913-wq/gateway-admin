@@ -27,6 +27,7 @@ class RegisterService:
     
     def __init__(self):
         self.gateway_url = settings.GATEWAY_URL
+        self.gateway_app_id = settings.GATEWAY_APP_ID
         
         # 根据 SSL 配置动态选择协议
         protocol = "https" if settings.SSL_ENABLED else "http"
@@ -71,37 +72,36 @@ class RegisterService:
         if nonce is None:
             nonce = hashlib.md5(f"{timestamp}{self._app_id}".encode()).hexdigest()[:16]
         
-        message = f"{self._app_id}\n{timestamp}\n{nonce}\n{body}"
+        message = f"{timestamp}{nonce}{body}"
         signature = hmac.new(
             self._hmac_key.encode(),
             message.encode(),
             hashlib.sha256
-        ).digest()
+        ).hexdigest()
         
         return {
-            "X-App-ID": self._app_id,
             "X-Timestamp": timestamp,
             "X-Nonce": nonce,
-            "X-Signature": base64.b64encode(signature).decode()
+            "X-Signature": signature
         }
     
     async def _get_hmac_key_from_redis(self) -> bool:
         """
-        从 Redis 获取 HMAC Key（支持 Consul 降级）
+        从 Redis 获取 Gateway 的 HMAC Key（用于注册到 Gateway）
         
         Returns:
             是否成功获取
         """
         try:
-            # 尝试从 Redis 获取 HMAC Key
-            hmac_key = await config_service.get_hmac_key(self._app_id)
+            # 获取 Gateway 的 HMAC 密钥
+            hmac_key = await config_service.get_hmac_key(self.gateway_app_id)
             
             if hmac_key:
                 self._hmac_key = hmac_key
-                logger.info(f"从 Redis 获取 HMAC Key 成功: {self._app_id}")
+                logger.info(f"从 Redis 获取 Gateway HMAC Key 成功")
                 return True
             else:
-                logger.warning(f"Redis 中未找到 HMAC Key: {self._app_id}，将自动生成")
+                logger.warning(f"Redis 中未找到 Gateway HMAC Key，将自动生成")
                 return False
         except Exception as e:
             logger.error(f"从 Redis 获取 HMAC Key 失败: {e}")
@@ -110,39 +110,39 @@ class RegisterService:
                 try:
                     from app.utils.consul_manager import get_consul_manager
                     consul = get_consul_manager()
-                    key = consul.get_kv(f"config/hmac/{self._app_id}")
+                    key = consul.get_kv(f"config/hmac/{self.gateway_app_id}")
                     if key:
                         self._hmac_key = key
-                        logger.info(f"从 Consul 降级获取 HMAC Key 成功: {self._app_id}")
+                        logger.info(f"从 Consul 降级获取 Gateway HMAC Key 成功")
                         return True
                 except Exception as ce:
                     logger.error(f"从 Consul 获取 HMAC Key 也失败: {ce}")
             return False
     
     async def _create_hmac_key_if_needed(self):
-        """如果 Redis 中没有 HMAC Key，则创建一个新的（双写 Redis + Consul）"""
+        """如果 Redis 中没有 Gateway 的 HMAC Key，则创建一个新的（双写 Redis + Consul）"""
         if not self._hmac_key:
             try:
                 import secrets
                 new_key = secrets.token_urlsafe(32)
                 
-                # 1. 写入 Redis
-                await config_service.set_hmac_key(self._app_id, new_key)
+                # 1. 写入 Redis（使用 gateway_app_id）
+                await config_service.set_hmac_key(self.gateway_app_id, new_key)
                 
                 # 2. 降级写入 Consul
                 if hasattr(settings, 'CONSUL_ENABLED') and settings.CONSUL_ENABLED:
                     try:
                         from app.utils.consul_manager import get_consul_manager
                         consul = get_consul_manager()
-                        consul.set_kv(f"config/hmac/{self._app_id}", new_key)
-                        logger.info(f"HMAC Key 已同步到 Consul")
+                        consul.set_kv(f"config/hmac/{self.gateway_app_id}", new_key)
+                        logger.info(f"Gateway HMAC Key 已同步到 Consul")
                     except Exception as ce:
-                        logger.warning(f"同步 HMAC Key 到 Consul 失败: {ce}")
+                        logger.warning(f"同步 Gateway HMAC Key 到 Consul 失败: {ce}")
                 
                 self._hmac_key = new_key
-                logger.info(f"已创建新的 HMAC Key: {self._app_id}")
+                logger.info(f"已创建新的 Gateway HMAC Key")
             except Exception as e:
-                logger.error(f"创建 HMAC Key 失败: {e}")
+                logger.error(f"创建 Gateway HMAC Key 失败: {e}")
     
     async def _get_cors_config_from_redis(self):
         """从 Redis 获取 CORS 配置并应用"""
