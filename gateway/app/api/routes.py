@@ -207,15 +207,12 @@ async def health_check():
     健康检查接口（供负载均衡器使用）
     """
     from app.utils.redis_manager import get_redis_manager
-    from app.utils.consul_manager import get_consul_manager
     
     redis = get_redis_manager()
-    consul = get_consul_manager()
     
     checks = {
         "gateway": "healthy",
-        "redis": "unknown",
-        "consul": "disabled" if not settings.CONSUL_ENABLED else "unknown"
+        "redis": "unknown"
     }
     
     # 检查 Redis
@@ -224,16 +221,6 @@ async def health_check():
         checks["redis"] = "healthy"
     except Exception as e:
         checks["redis"] = f"unhealthy: {str(e)}"
-    
-    # 检查 Consul
-    if settings.CONSUL_ENABLED:
-        try:
-            if consul.is_healthy():
-                checks["consul"] = "healthy"
-            else:
-                checks["consul"] = "unhealthy"
-        except Exception as e:
-            checks["consul"] = f"unhealthy: {str(e)}"
     
     # 整体状态
     overall_status = "healthy" if all(v == "healthy" for v in checks.values()) else "degraded"

@@ -3,7 +3,7 @@
 
 只允许以下来源访问 Admin 服务：
 1. Gateway（通过 X-Forwarded-By Header + HMAC 签名标识）
-2. 已在 Redis/Consul 中注册的内部服务（通过 X-Service-Name + HMAC 签名）
+2. 已在 Redis 中注册的内部服务（通过 X-Service-Name + HMAC 签名）
 
 安全机制：
 - 所有内部请求必须携带 HMAC 签名
@@ -28,13 +28,12 @@ class ServiceSourceAuthMiddleware(BaseHTTPMiddleware):
     
     验证请求来源是否为：
     - Gateway
-    - 已注册到 Redis/Consul 的内部服务
+    - 已注册到 Redis 的内部服务
     """
     
-    def __init__(self, app, redis_manager=None, consul_manager=None):
+    def __init__(self, app, redis_manager=None):
         super().__init__(app)
         self.redis = redis_manager
-        self.consul = consul_manager
         
         # 从配置读取公开路径
         self.public_patterns = parse_public_paths(settings.PUBLIC_PATHS)
@@ -170,8 +169,9 @@ class ServiceSourceAuthMiddleware(BaseHTTPMiddleware):
             logger.warning(f"Invalid timestamp format from {service_name}")
             return False
         
-        # 从 Redis 获取 HMAC Key
-        hmac_key = await self._get_hmac_key(service_name)
+        # 从 Redis 获取 HMAC Key（使用当前服务的密钥，而不是发送方的密钥）
+        from config import settings
+        hmac_key = await self._get_hmac_key(settings.SERVICE_NAME)
         if not hmac_key:
             logger.error(f"HMAC key not found for service: {service_name}")
             return False
@@ -228,7 +228,7 @@ class ServiceSourceAuthMiddleware(BaseHTTPMiddleware):
         判断请求是否来自已注册的服务
         
         验证步骤：
-        1. 检查服务名是否在 Redis/Consul 注册列表中
+        1. 检查服务名是否在 Redis 注册列表中
         2. （可选）验证 IP 地址是否匹配注册的实例
         """
         
@@ -256,7 +256,7 @@ class ServiceSourceAuthMiddleware(BaseHTTPMiddleware):
         """
         获取所有已注册的服务名称（带缓存）
         
-        优先从 Redis 获取，Consul 作为降级方案
+        从 Redis 获取
         """
         
         now = time.time()
@@ -286,19 +286,6 @@ class ServiceSourceAuthMiddleware(BaseHTTPMiddleware):
             
             except Exception as e:
                 logger.error(f"❌ Failed to get registered services from Redis: {e}")
-        
-        # 2. 从 Consul 获取（降级方案）
-        if not service_names and self.consul:
-            try:
-                consul_services = self.consul.get_services()
-                for svc_name in consul_services.keys():
-                    if svc_name != "consul" and svc_name != settings.SERVICE_NAME:
-                        service_names.add(svc_name)
-                
-                logger.debug(f"📋 Registered services from Consul (fallback): {service_names}")
-            
-            except Exception as e:
-                logger.error(f"❌ Failed to get registered services from Consul: {e}")
         
         # 更新缓存
         if service_names:

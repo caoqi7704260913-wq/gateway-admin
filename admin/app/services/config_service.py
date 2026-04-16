@@ -1,20 +1,18 @@
 """
-配置管理服务（CORS 和 HMAC Key 存储在 Redis + Consul）
+配置管理服务（CORS 和 HMAC Key 存储在 Redis）
 
 与 Gateway 保持一致的存储格式：
 - HMAC Key: config:hmac:{app_id}
 - CORS Config: config:cors
 
 支持降级策略：
-- Redis 不可用时使用 Consul
-- Consul 不可用时使用内存缓存
+- Redis 不可用时使用内存缓存
 - Gateway 不可时使用默认配置
 """
 import json
 from typing import Optional, Dict, Any, List
 from loguru import logger
 from app.utils.redis_manager import redis_manager
-from app.utils.consul_manager import consul_manager
 from app.utils.fallback_manager import fallback_manager
 
 
@@ -91,7 +89,7 @@ class ConfigService:
     @classmethod
     async def get_hmac_key(cls, app_id: str) -> Optional[str]:
         """
-        获取 HMAC Key（支持 Redis → Consul 降级）
+        获取 HMAC Key
         
         Args:
             app_id: 应用 ID
@@ -101,42 +99,23 @@ class ConfigService:
         """
         key = f"{cls.KEY_HMAC}:{app_id}"
         
-        # 1. 尝试从 Redis 获取
+        # 从 Redis 获取
         try:
             hmac_key = await redis_manager.get(key)
             if hmac_key:
                 logger.debug(f"HMAC key retrieved from Redis: {app_id}")
                 return hmac_key
         except Exception as e:
-            logger.warning(f"Failed to get HMAC key from Redis: {e}")
+            logger.error(f"Failed to get HMAC key from Redis: {e}")
         
-        # 2. 降级：从 Consul 获取
-        try:
-            if consul_manager.client:  # 检查 client 是否存在
-                consul_path = f"config/hmac/{app_id}"
-                hmac_key = consul_manager.get_kv(consul_path)
-                if hmac_key:
-                    logger.info(f"HMAC key retrieved from Consul (fallback): {app_id}")
-                    
-                    # 可选：将 Consul 的数据回写到 Redis
-                    try:
-                        await redis_manager.set(key, hmac_key)
-                        logger.debug(f"Synced HMAC key from Consul to Redis: {app_id}")
-                    except Exception as sync_error:
-                        logger.warning(f"Failed to sync HMAC key to Redis: {sync_error}")
-                    
-                    return hmac_key
-        except Exception as e:
-            logger.warning(f"Failed to get HMAC key from Consul: {e}")
-        
-        # 3. 都失败，返回 None
-        logger.warning(f"HMAC key not found in Redis or Consul: {app_id}")
+        # 失败，返回 None
+        logger.warning(f"HMAC key not found in Redis: {app_id}")
         return None
     
     @classmethod
     async def set_hmac_key(cls, app_id: str, secret_key: str) -> bool:
         """
-        设置 HMAC Key（同时写入 Redis 和 Consul）
+        设置 HMAC Key
         
         Args:
             app_id: 应用 ID
@@ -146,33 +125,19 @@ class ConfigService:
             是否设置成功
         """
         key = f"{cls.KEY_HMAC}:{app_id}"
-        redis_success = False
-        consul_success = False
         
-        # 1. 写入 Redis
+        # 写入 Redis
         try:
-            redis_success = await redis_manager.set(key, secret_key)
-            if redis_success:
+            success = await redis_manager.set(key, secret_key)
+            if success:
                 logger.debug(f"HMAC key written to Redis: {app_id}")
+                return True
+            else:
+                logger.error(f"Failed to write HMAC key to Redis: {app_id}")
+                return False
         except Exception as e:
             logger.error(f"Failed to write HMAC key to Redis: {e}")
-        
-        # 2. 写入 Consul（降级备份）
-        try:
-            if consul_manager.client:  # 检查 client 是否存在
-                consul_path = f"config/hmac/{app_id}"
-                consul_success = consul_manager.set_kv(consul_path, secret_key)
-                if consul_success:
-                    logger.debug(f"HMAC key written to Consul: {app_id}")
-        except Exception as e:
-            logger.error(f"Failed to write HMAC key to Consul: {e}")
-        
-        # 至少一个成功即视为成功
-        success = redis_success or consul_success
-        if not success:
-            logger.error(f"Failed to write HMAC key to both Redis and Consul: {app_id}")
-        
-        return success
+            return False
     
     @classmethod
     async def delete_hmac_key(cls, app_id: str) -> bool:

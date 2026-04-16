@@ -11,7 +11,6 @@ from typing import Optional
 from loguru import logger
 from config import settings
 from app.utils.redis_manager import get_redis_manager
-from app.utils.consul_manager import get_consul_manager
 from app.utils.httpx_manager import get_http_client
 from app.models.service import ServiceBase
 
@@ -23,7 +22,6 @@ class HealthChecker:
         self.port = port
         self.interval = interval
         self.redis_manager = get_redis_manager()
-        self.consul_manager = get_consul_manager()
         self.http_client = get_http_client()
         self._running = False  # 添加运行状态标志
 
@@ -48,16 +46,7 @@ class HealthChecker:
             return services
         except Exception as e:
             logger.error(f"Failed to get services from redis: {e}")
-            # Consul 未启用时直接返回空
-            if not settings.CONSUL_ENABLED:
-                return []
-            # 从consul获取服务列表作为降级方案
-            try:
-                services = await self._get_service_instances(service_name)
-                return services
-            except Exception as consul_error:
-                logger.error(f"Failed to get services from consul: {consul_error}")
-                return []
+            return []
         
 
 
@@ -149,9 +138,6 @@ class HealthChecker:
                     service_data = json.loads(data)
                     service_data['status'] = 'healthy'
                     await self.redis_manager.set(redis_key, json.dumps(service_data), ex=settings.REDIS_TTL)
-                
-                if settings.CONSUL_ENABLED:
-                    self.consul_manager.update_ttl(service_instance.id)
             except Exception as e:
                 logger.warning(f"Failed to update healthy service: {e}")
         else:
@@ -160,10 +146,7 @@ class HealthChecker:
                 await self.redis_manager.delete(redis_key)
                 logger.warning(f"Service unregistered (unhealthy): {service_instance.name} (ID: {service_instance.id})")
                 
-                if settings.CONSUL_ENABLED:
-                    self.consul_manager.deregister_service(service_instance.id)
-                
-                # 清理本地缓存（保持3级缓存一致性）
+                # 清理本地缓存（保持2级缓存一致性）
                 from app.services.discovery import get_service_discovery
                 discovery = get_service_discovery()
                 cache_key = discovery._cache_key(service_instance.name, service_instance.id)
@@ -174,49 +157,6 @@ class HealthChecker:
             except Exception as e:
                 logger.warning(f"Failed to deregister unhealthy service: {e}")
     
-
-    async def _get_service_instances(self, service_name: str) -> list[ServiceBase]:
-        """
-        从Consul获取服务实例列表
-        
-        Args:
-            service_name: 服务名称
-            
-        Returns:
-            服务实例列表
-        """
-        try:
-            services = self.consul_manager.get_services()
-            # 过滤出指定服务名称的实例
-            protocol = "http"
-            result = []
-            for service_id, service_info in services.items():
-                if service_name in service_id or service_info.get('Service') == service_name:
-                    # 从 Tags 中提取协议
-                    protocol = "http"
-                    tags = service_info.get('Tags') or []
-                    if isinstance(tags, list):
-                        for tag in tags:
-                            if isinstance(tag, str) and tag.startswith("protocol:"):
-                                protocol = tag.split("protocol:", 1)[1]
-                                break
-                    
-                    service_base = ServiceBase(
-                        id=service_id,
-                        name=service_info.get('Service', service_name),
-                        host=service_info.get('Address', ''),
-                        ip=service_info.get('Address', ''),
-                        port=service_info.get('Port', 0),
-                        url=f"{protocol}://{service_info.get('Address', '')}:{service_info.get('Port', 0)}",
-                        weight=1,
-                        status="healthy"
-                    )
-                    result.append(service_base)
-            return result
-        except Exception as e:
-            logger.error(f"Failed to get service instances from consul: {e}")
-            return []
-
 
     async def _get_services_by_keys(self, keys: list[str]) -> list[ServiceBase]:
         """

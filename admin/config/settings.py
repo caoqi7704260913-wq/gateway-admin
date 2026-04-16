@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     SERVICE_DESCRIPTION: str = "后台管理服务"
     
     # HMAC 白名单配置
-    HMAC_WHITELIST: str = "/api/auth/*,/api/captcha/*"
+    HMAC_WHITELIST: str = "/api/auth/*,/api/captcha/*,/api/dashboard/*"
     
     # Gateway 配置
     GATEWAY_URL: str = "http://localhost:9000"

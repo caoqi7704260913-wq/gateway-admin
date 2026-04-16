@@ -24,7 +24,7 @@ DEFAULT_EXCLUDED_PATHS = [
     "/redoc",
     "/openapi.json",
     
-    # 服务注册与发现（内部服务直连 Consul，不走 HTTP）
+    # 服务注册与发现（内部服务直连，不走 HTTP）
     #"/api/services/register",   # 服务注册
     #"/api/services/",           # 服务列表和详情
     #"/api/services/heartbeat",  # 心跳检测
@@ -114,6 +114,12 @@ class HMACMiddleware(BaseHTTPMiddleware):
             from app.utils.redis_manager import get_redis_manager
             redis = get_redis_manager()
             
+            # 提取实际路径（去掉服务名前缀）
+            # 例如: /admin-service/api/captcha/generate -> /api/captcha/generate
+            parts = path.strip('/').split('/', 1)
+            actual_path = '/' + parts[1] if len(parts) > 1 else path
+            logger.debug(f"Original path: {path}, Actual path: {actual_path}")
+            
             # 获取所有服务
             service_keys = await redis.keys("service:*:*")
             for key in service_keys:
@@ -125,8 +131,8 @@ class HMACMiddleware(BaseHTTPMiddleware):
                     
                     # 检查路径是否匹配白名单
                     for pattern in whitelist:
-                        if self._match_path(path, pattern):
-                            logger.debug(f"Path {path} matched whitelist pattern {pattern}")
+                        if self._match_path(actual_path, pattern):
+                            logger.debug(f"Path {actual_path} matched whitelist pattern {pattern}")
                             return True
         except Exception as e:
             logger.error(f"Check service whitelist failed: {e}")

@@ -22,8 +22,7 @@ from app.middleware.dynamic_cors import DynamicCORSMiddleware
 from app.api import routes as api_routes
 from app.services.router import get_router
 from app.services.config_manager import get_config_manager
-from app.utils.redis_manager import get_redis_manager, close  #  导入 close 函数
-from app.utils.consul_manager import get_consul_manager
+from app.utils.redis_manager import get_redis_manager, close
 
 
 @asynccontextmanager
@@ -68,15 +67,6 @@ async def lifespan(app: FastAPI):
         await redis.set("config:hmac:gateway", new_key)
         logger.info(f"Gateway HMAC 密钥已存储到 Redis")
         
-        # 同时写入 Consul
-        try:
-            consul = get_consul_manager()
-            if consul.is_healthy():
-                consul.client.kv.put("config/hmac/gateway", new_key)
-                logger.info(f"Gateway HMAC 密钥已同步到 Consul")
-        except Exception as e:
-            logger.warning(f"⚠️  写入 Consul 失败: {e}")
-        
         # 重新加载配置
         await config_manager.load_configs()
     else:
@@ -91,13 +81,9 @@ async def lifespan(app: FastAPI):
     if not existing_key:
         new_key = secrets.token_urlsafe(32)
         await config_mgr.create_hmac_key("gateway", new_key)
-        logger.info(f"Gateway HMAC 密钥已生成并写入 Redis/Consul: {new_key[:16]}...")
+        logger.info(f"Gateway HMAC 密钥已生成并写入 Redis: {new_key[:16]}...")
     else:
         logger.debug(f"Gateway HMAC 密钥已存在: {existing_key[:16]}...")
-
-    consul = get_consul_manager()
-    if settings.CONSUL_ENABLED and consul.is_healthy():
-        logger.info(f"Consul 已连接: {settings.CONSUL_HOST}:{settings.CONSUL_PORT}")
 
     # 启动健康检查服务（从 Redis 读取已注册的服务）
     from app.services.health_checker import HealthChecker
@@ -154,9 +140,7 @@ async def lifespan(app: FastAPI):
             pass
     
     await HTTPClientManager.close()
-    await close()  #  使用模块级 close 函数
-    if settings.CONSUL_ENABLED:
-        await consul.close()
+    await close()
     logger.info("Gateway 已停止")
 
 

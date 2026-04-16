@@ -106,44 +106,44 @@ class RegisterService:
                 return False
         except Exception as e:
             logger.error(f"从 Redis 获取 HMAC Key 失败: {e}")
-            # Redis 失败时，尝试从 Consul 获取（如果配置了）
-            if hasattr(settings, 'CONSUL_ENABLED') and settings.CONSUL_ENABLED:
-                try:
-                    from app.utils.consul_manager import get_consul_manager
-                    consul = get_consul_manager()
-                    key = consul.get_kv(f"config/hmac/{self.gateway_app_id}")
-                    if key:
-                        self._hmac_key = key
-                        logger.info(f"从 Consul 降级获取 Gateway HMAC Key 成功")
-                        return True
-                except Exception as ce:
-                    logger.error(f"从 Consul 获取 HMAC Key 也失败: {ce}")
             return False
     
     async def _create_hmac_key_if_needed(self):
-        """如果 Redis 中没有 Gateway 的 HMAC Key，则创建一个新的（双写 Redis + Consul）"""
+        """如果 Redis 中没有 Gateway 的 HMAC Key，则创建一个新的"""
         if not self._hmac_key:
             try:
                 import secrets
                 new_key = secrets.token_urlsafe(32)
                 
-                # 1. 写入 Redis（使用 gateway_app_id）
+                # 写入 Redis（使用 gateway_app_id）
                 await config_service.set_hmac_key(self.gateway_app_id, new_key)
-                
-                # 2. 降级写入 Consul
-                if hasattr(settings, 'CONSUL_ENABLED') and settings.CONSUL_ENABLED:
-                    try:
-                        from app.utils.consul_manager import get_consul_manager
-                        consul = get_consul_manager()
-                        consul.set_kv(f"config/hmac/{self.gateway_app_id}", new_key)
-                        logger.info(f"Gateway HMAC Key 已同步到 Consul")
-                    except Exception as ce:
-                        logger.warning(f"同步 Gateway HMAC Key 到 Consul 失败: {ce}")
                 
                 self._hmac_key = new_key
                 logger.info(f"已创建新的 Gateway HMAC Key")
             except Exception as e:
                 logger.error(f"创建 Gateway HMAC Key 失败: {e}")
+    
+    async def _ensure_service_hmac_key(self):
+        """确保 admin-service 自己的 HMAC 密钥存在并写入 Redis"""
+        try:
+            # 检查是否已存在
+            existing_key = await config_service.get_hmac_key(settings.SERVICE_NAME)
+            if existing_key:
+                logger.info(f"admin-service HMAC key already exists in Redis")
+                return
+            
+            # 生成新的 HMAC 密钥
+            import secrets
+            new_key = secrets.token_urlsafe(32)
+            
+            # 写入 Redis
+            success = await config_service.set_hmac_key(settings.SERVICE_NAME, new_key)
+            if success:
+                logger.info(f"Generated and stored admin-service HMAC key in Redis")
+            else:
+                logger.error(f"Failed to store admin-service HMAC key in Redis")
+        except Exception as e:
+            logger.error(f"Error ensuring service HMAC key: {e}")
     
     async def _get_cors_config_from_redis(self):
         """从 Redis 获取 CORS 配置并应用"""
@@ -163,11 +163,12 @@ class RegisterService:
         注册到 Gateway（支持降级）
         
         完整流程：
-        1. 从 Redis 获取 HMAC Key
-        2. 如果没有则创建新的
-        3. 从 Redis 获取 CORS 配置
-        4. 生成 HMAC 签名
-        5. 发送注册请求到 Gateway
+        1. 生成 admin-service 自己的 HMAC 密钥并写入 Redis
+        2. 从 Redis 获取 Gateway 的 HMAC Key
+        3. 如果没有则创建新的
+        4. 从 Redis 获取 CORS 配置
+        5. 生成 HMAC 签名
+        6. 发送注册请求到 Gateway
         
         降级策略：
         - Gateway 不可用时，本地模式运行
@@ -180,7 +181,10 @@ class RegisterService:
                 self._registered = False
                 return False
             
-            # 步骤 1: 从 Redis 获取 HMAC Key
+            # 步骤 0: 生成 admin-service 自己的 HMAC 密钥并写入 Redis
+            await self._ensure_service_hmac_key()
+            
+            # 步骤 1: 从 Redis 获取 Gateway 的 HMAC Key
             has_key = await self._get_hmac_key_from_redis()
             
             # 步骤 2: 如果没有则创建
@@ -199,12 +203,19 @@ class RegisterService:
             headers["Content-Type"] = "application/json"
             
             # 步骤 6: 发送注册请求
+            logger.info(f"Sending registration request to {self.gateway_url}/api/services/register")
+            logger.debug(f"Request headers: {headers}")
+            logger.debug(f"Request body: {body}")
+            
             response = await http_client.post(
                 f"{self.gateway_url}/api/services/register",
                 content=body,
                 headers=headers,
                 timeout=5.0
             )
+            
+            logger.info(f"Registration response status: {response.status_code}")
+            logger.debug(f"Registration response body: {response.text}")
             
             if response.status_code == 200:
                 result = response.json()

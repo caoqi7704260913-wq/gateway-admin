@@ -64,9 +64,9 @@ class FallbackManager:
         """
         if not self.is_fallback("redis"):
             try:
-                from app.utils.redis_manager import redis_manager
-                if redis_manager.client:
-                    return await redis_manager.client.get(key)
+                from app.utils.redis_manager import get_client
+                client = get_client()
+                return await client.get(key)
             except Exception as e:
                 logger.warning(f"Redis get failed, using memory cache: {e}")
                 self.set_fallback("redis", True)

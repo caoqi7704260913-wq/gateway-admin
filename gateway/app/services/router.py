@@ -84,7 +84,7 @@ class Router:
     
     async def _get_hmac_key(self, service_name: str) -> Optional[str]:
         """
-        从 Redis 获取服务的 HMAC Key（支持 Consul 降级）
+        从 Redis 获取服务的 HMAC Key
         
         Args:
             service_name: 服务名称
@@ -93,7 +93,6 @@ class Router:
             HMAC Key 或 None
         """
         redis_key = f"config:hmac:{service_name}"
-        consul_key = f"config/hmac/{service_name}"
         
         # 1. 尝试从 Redis 获取
         if self.redis:
@@ -105,29 +104,8 @@ class Router:
             except Exception as e:
                 logger.warning(f"Failed to get HMAC key from Redis: {e}")
         
-        # 2. 降级：从 Consul 获取
-        try:
-            from app.utils.consul_manager import get_consul_manager
-            consul = get_consul_manager()
-            if consul.is_available():
-                key = consul.get_kv(consul_key)
-                if key:
-                    logger.info(f"HMAC key retrieved from Consul (fallback): {service_name}")
-                    
-                    # 可选：将 Consul 的数据回写到 Redis
-                    if self.redis:
-                        try:
-                            await self.redis.set(redis_key, key)
-                            logger.debug(f"Synced HMAC key from Consul to Redis: {service_name}")
-                        except Exception as sync_error:
-                            logger.warning(f"Failed to sync HMAC key to Redis: {sync_error}")
-                    
-                    return key
-        except Exception as e:
-            logger.warning(f"Failed to get HMAC key from Consul: {e}")
-        
-        # 3. 都失败，返回 None
-        logger.warning(f"HMAC key not found in Redis or Consul: {service_name}")
+        # 2. 都失败，返回 None
+        logger.warning(f"HMAC key not found in Redis: {service_name}")
         return None
     
     async def route(self, request: Request) -> Response:

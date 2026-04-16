@@ -14,9 +14,6 @@ from .httpx_manager import HTTPClientManager, get_http_client
 # HMAC 验证
 from .hmac_validator import HMACValidator, get_hmac_validator
 
-# Consul 管理
-from .consul_manager import ConsulManager, get_consul_manager
-
 __all__ = [
     "ValidationManager",
     "RedisManager",
@@ -25,6 +22,4 @@ __all__ = [
     "get_http_client",
     "HMACValidator",
     "get_hmac_validator",
-    "ConsulManager",
-    "get_consul_manager",
 ]

@@ -4,7 +4,7 @@
 - 服务注册：服务实例启动时向注册中心注册自己的信息
 - 服务发现：其他服务或客户端通过注册中心查询可用的服务实例列表
 - 健康检查/注销：由 Gateway health_checker 自动完成
-- 容灾降级：Redis → Consul → 本地缓存
+- 容灾降级：Redis → 本地缓存
 """
 import json
 import os
@@ -13,7 +13,6 @@ from loguru import logger
 from config import settings
 from config.settings import BASE_DIR
 from app.utils.redis_manager import get_redis_manager
-from app.utils.consul_manager import get_consul_manager
 from app.models.service import ServiceBase
 
 
@@ -21,7 +20,6 @@ class ServiceDiscovery:
 
     def __init__(self):
         self.redis_manager = get_redis_manager()
-        self.consul_manager = get_consul_manager()
         # 本地缓存路径
         self._cache_file = os.path.join(BASE_DIR, "data", "services_cache.json")
         # 内存缓存: {f"{service_name}:{service_id}": ServiceBase}
@@ -59,7 +57,7 @@ class ServiceDiscovery:
 
     async def register_service(self, service: ServiceBase) -> bool:
         """
-        注册服务实例到注册中心（双写模式：Redis + Consul + 本地缓存）
+        注册服务实例到注册中心（Redis + 本地缓存）
         
         Args:
             service: 服务实例对象
@@ -68,7 +66,6 @@ class ServiceDiscovery:
             是否成功注册
         """
         redis_ok = False
-        consul_ok = False
         
         # 0. 清理同一服务的其他实例（避免重复注册）
         try:
@@ -88,18 +85,6 @@ class ServiceDiscovery:
                 if cache_key in self._local_cache:
                     del self._local_cache[cache_key]
                     logger.info(f"Removed from local cache: {cache_key}")
-            
-            # 清理 Consul 中的旧实例
-            if settings.CONSUL_ENABLED:
-                try:
-                    consul_services = self.consul_manager.get_services()
-                    for svc_id, svc_info in consul_services.items():
-                        # 检查是否是同一服务的不同实例
-                        if svc_info.get('Service') == service.name and svc_id != service.id:
-                            self.consul_manager.deregister_service(svc_id)
-                            logger.info(f"Removed old instance from Consul: {svc_id}")
-                except Exception as e:
-                    logger.warning(f"Failed to cleanup Consul instances: {e}")
         except Exception as e:
             logger.warning(f"Failed to cleanup old instances: {e}")
         
@@ -111,45 +96,16 @@ class ServiceDiscovery:
             redis_ok = True
         except Exception as e:
             logger.error(f"Failed to register service in Redis: {e}")
-            # Redis 失败时，记录日志但继续尝试 Consul
         
-        # 2. 注册到 Consul (如果 Redis 失败，Consul 将作为主存储)
-        if settings.CONSUL_ENABLED:
-            try:
-                tags = service.metadata.get("tags", []) if service.metadata else []
-                if service.url and service.url.startswith("https"):
-                    tags = [t for t in tags if not t.startswith("protocol:")]
-                    tags.append("protocol:https")
-                
-                check = {
-                    "ttl": f"{settings.REDIS_TTL}s",
-                    "status": "passing"
-                }
-                
-                consul_ok = self.consul_manager.register_service(
-                    name=service.name,
-                    service_id=service.id,
-                    address=service.ip or service.host,
-                    port=service.port,
-                    tags=tags,
-                    check=check
-                )
-                if consul_ok:
-                    logger.info(f"Service registered in Consul: {service.name} (ID: {service.id})")
-                else:
-                    logger.warning(f"Consul registration returned False for: {service.name}")
-            except Exception as e:
-                logger.error(f"Failed to register service in Consul: {e}")
-        
-        # 3. 同步到本地缓存（始终更新，作为兜底）
+        # 2. 同步到本地缓存（始终更新，作为兜底）
         self._local_cache[self._cache_key(service.name, service.id)] = service
         self._save_local_cache()
         
-        return redis_ok or consul_ok
+        return redis_ok
 
     async def unregister_service(self, service_name: str, service_id: str) -> bool:
         """
-        注销服务实例（从 Redis、Consul 和本地缓存中删除）
+        注销服务实例（从 Redis 和本地缓存中删除）
         
         Args:
             service_name: 服务名称
@@ -159,7 +115,6 @@ class ServiceDiscovery:
             是否成功注销
         """
         redis_ok = False
-        consul_ok = False
         
         # 1. 从 Redis 删除
         try:
@@ -170,15 +125,6 @@ class ServiceDiscovery:
         except Exception as e:
             logger.error(f"Failed to remove service from Redis: {e}")
         
-        # 2. 从 Consul 注销
-        if settings.CONSUL_ENABLED:
-            try:
-                self.consul_manager.deregister_service(service_id)
-                logger.info(f"Service deregistered from Consul: {service_name} (ID: {service_id})")
-                consul_ok = True
-            except Exception as e:
-                logger.error(f"Failed to deregister service from Consul: {e}")
-        
         # 3. 从本地缓存删除
         cache_key = self._cache_key(service_name, service_id)
         if cache_key in self._local_cache:
@@ -186,11 +132,11 @@ class ServiceDiscovery:
             self._save_local_cache()
             logger.info(f"Service removed from local cache: {cache_key}")
         
-        return redis_ok or consul_ok
+        return redis_ok
 
     async def get_healthy_services(self, service_name: str) -> list[ServiceBase]:
         """
-        获取健康的服务实例列表（降级策略：Redis → Consul → 本地缓存）
+        获取健康的服务实例列表（降级策略：Redis → 本地缓存）
         
         Args:
             service_name: 服务名称
@@ -218,16 +164,7 @@ class ServiceDiscovery:
         except Exception as e:
             logger.error(f"Failed to get services from Redis: {e}")
         
-        # 2. Redis 失败，尝试 Consul
-        if settings.CONSUL_ENABLED:
-            try:
-                services = await self._get_services_from_consul(service_name)
-                if services:
-                    return services
-            except Exception as e:
-                logger.error(f"Failed to get services from Consul: {e}")
-        
-        # 3. 两者都失败，返回本地缓存
+        # 2. Redis 失败，返回本地缓存
         logger.warning(f"Using local cache as fallback for service: {service_name}")
         return [
             svc for key, svc in self._local_cache.items()
@@ -236,7 +173,7 @@ class ServiceDiscovery:
 
     async def get_service(self, service_name: str, service_id: Optional[str] = None) -> Optional[ServiceBase]:
         """
-        获取指定服务实例（降级策略：Redis → Consul → 本地缓存）
+        获取指定服务实例（降级策略：Redis → 本地缓存）
         
         Args:
             service_name: 服务名称
@@ -258,20 +195,7 @@ class ServiceDiscovery:
             services = await self.get_healthy_services(service_name)
             return services[0] if services else None
         
-        # 2. Redis 没有或失败，从 Consul 获取
-        if settings.CONSUL_ENABLED:
-            try:
-                services = await self._get_services_from_consul(service_name)
-                if service_id:
-                    for svc in services:
-                        if svc.id == service_id:
-                            return svc
-                else:
-                    return services[0] if services else None
-            except Exception as e:
-                logger.error(f"Failed to get service from Consul: {e}")
-        
-        # 3. 两者都失败，从本地缓存获取
+        # 2. Redis 没有或失败，从本地缓存获取
         logger.warning(f"Using local cache as fallback for service: {service_name}:{service_id}")
         cache_key = self._cache_key(service_name, service_id) if service_id else None
         if cache_key:
@@ -280,36 +204,6 @@ class ServiceDiscovery:
             services = [svc for key, svc in self._local_cache.items() if key.startswith(f"{service_name}:")]
             return services[0] if services else None
 
-    async def _get_services_from_consul(self, service_name: str) -> list[ServiceBase]:
-        """从 Consul 获取服务列表"""
-        try:
-            services = self.consul_manager.get_services()
-            result = []
-            for service_id, info in services.items():
-                if service_name in service_id or info.get('Service') == service_name:
-                    # 从 Tags 中提取协议
-                    protocol = "http"
-                    tags = info.get('Tags') or []
-                    if isinstance(tags, list):
-                        for tag in tags:
-                            if isinstance(tag, str) and tag.startswith("protocol:"):
-                                protocol = tag.split("protocol:", 1)[1]
-                                break
-                    
-                    result.append(ServiceBase(
-                        id=service_id,
-                        name=info.get('Service', service_name),
-                        host=info.get('Address', ''),
-                        ip=info.get('Address', ''),
-                        port=info.get('Port', 0),
-                        url=f"{protocol}://{info.get('Address')}:{info.get('Port')}",
-                        weight=1,
-                        status="healthy"
-                    ))
-            return result
-        except Exception as e:
-            logger.error(f"Failed to get services from Consul: {e}")
-            return []
 
 
 # 单例实例
