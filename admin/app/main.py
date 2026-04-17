@@ -108,6 +108,7 @@ app = FastAPI(
     title="后台管理服务",
     description="管理后台 API 服务",
     version="1.0.0",
+    debug=settings.is_debug,
     lifespan=lifespan
 )
 

@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     # 应用配置
     APP_NAME: str = "Gateway API"
     APP_VERSION: str = "1.0.0"
-    DEBUG: bool = True
+    DEBUG: Union[bool, str] = True
 
     @field_validator("DEBUG", mode="before")
     @classmethod
@@ -30,6 +30,13 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return v.lower() in ("true", "1", "yes", "release")
         return True
+    
+    @property
+    def is_debug(self) -> bool:
+        """安全的 DEBUG 值"""
+        if isinstance(self.DEBUG, bool):
+            return self.DEBUG
+        return str(self.DEBUG).lower() in ("true", "1", "yes")
 
     # 服务器配置
     HOST: str = "0.0.0.0"

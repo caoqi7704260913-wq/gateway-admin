@@ -149,7 +149,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    debug=settings.DEBUG,
+    debug=settings.is_debug,
     lifespan=lifespan
 )
 
@@ -202,7 +202,7 @@ if __name__ == "__main__":
         "main:app",
         host=settings.HOST,
         port=settings.PORT,
-        reload=settings.DEBUG,
+        reload=settings.is_debug,
         log_level="info",
         ssl_certfile=ssl_certfile,  # 显式传递 SSL 参数
         ssl_keyfile=ssl_keyfile

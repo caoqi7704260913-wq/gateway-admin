@@ -12,10 +12,20 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 class Settings(BaseSettings):
     APP_NAME: str = "用户服务"
+    APP_DESCRIPTION: str = "用户服务"
+    APP_VERSION: str = "0.1.0"
     DEBUG: Union[bool, str] = True
     HOST: str = "0.0.0.0"
     PORT: int = 8002
     
+
+    @property
+    def is_debug(self) -> bool:
+        """安全的 DEBUG 值"""
+        if isinstance(self.DEBUG, bool):
+            return self.DEBUG
+        return str(self.DEBUG).lower() in ("true", "1", "yes")
+
     # HTTPS 配置
     SSL_ENABLED: bool = False
     SSL_CERT_FILE: str = ""
