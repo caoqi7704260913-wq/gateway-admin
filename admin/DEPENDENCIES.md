@@ -23,6 +23,7 @@
 
 ### Redis
 - **redis** (>=5.2.0) - Redis 客户端（支持异步）
+  - Token 存储
   - HMAC Key 存储
   - CORS 配置缓存
   - 限流计数
@@ -260,7 +261,6 @@ pip install pytest pytest-asyncio
 | SQLModel | ✅ | ❌ | Admin 需要数据库 |
 | aiomysql | ✅ | ❌ | Admin 需要 MySQL |
 | passlib | ✅ | ❌ | Admin 需要密码加密 |
-| python-consul | ❌ | ✅ | Gateway 需要 Consul |
 | httpx | ✅ | ✅ | Admin: 注册服务 / Gateway: 代理请求 |
 
 ### 共同依赖
@@ -274,5 +274,5 @@ pip install pytest pytest-asyncio
 
 ---
 
-**最后更新**: 2026-04-13  
+**最后更新**: 2026-04-17  
 **维护者**: Admin Team
