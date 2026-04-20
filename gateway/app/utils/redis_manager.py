@@ -51,30 +51,37 @@ def _init_standalone():
 
 def _init_cluster():
     """初始化集群模式"""
-    global _cluster
+    global _cluster, _client
     
     cluster_nodes = settings.REDIS_CLUSTER_NODES
     if not cluster_nodes:
-        cluster_nodes = [f"{settings.REDIS_HOST}:{settings.REDIS_PORT}"]
-
-    primary_node = cluster_nodes[0]
-    if ':' in primary_node:
-        host, port = primary_node.split(':', 1)
-        url = f"redis://:{settings.REDIS_PASSWORD}@{host}:{port}/0" if settings.REDIS_PASSWORD else f"redis://{host}:{port}/0"
+        cluster_nodes_str = f"{settings.REDIS_HOST}:{settings.REDIS_PORT}"
     else:
-        # 使用配置的端口，默认为 6379
-        port = settings.REDIS_PORT
-        url = f"redis://:{settings.REDIS_PASSWORD}@{primary_node}:{port}/0" if settings.REDIS_PASSWORD else f"redis://{primary_node}:{port}/0"
+        cluster_nodes_str = cluster_nodes
 
-    _cluster = RedisCluster.from_url(
-        url,
+    if isinstance(cluster_nodes_str, str):
+        nodes_list = [node.strip() for node in cluster_nodes_str.split(',') if node.strip()]
+    else:
+        nodes_list = cluster_nodes_str
+
+    startup_nodes = []
+    for node in nodes_list:
+        if ':' in node:
+            host, port = node.split(':', 1)
+            startup_nodes.append({"host": host, "port": int(port)})
+        else:
+            startup_nodes.append({"host": node, "port": settings.REDIS_PORT})
+
+    _cluster = RedisCluster(
+        startup_nodes=startup_nodes,
+        password=settings.REDIS_PASSWORD if settings.REDIS_PASSWORD else None,
         max_connections=settings.REDIS_POOL_SIZE,
         decode_responses=settings.REDIS_DECODE_RESPONSES,
     )
     _client = _cluster
 
 
-def get_client() -> Redis:  # type: ignore
+def get_client() -> Redis:
     """获取全局 Redis 客户端实例（线程安全，延迟初始化）"""
     global _client
     
@@ -83,7 +90,7 @@ def get_client() -> Redis:  # type: ignore
             if _client is None:
                 _init_pool()
     
-    return _client  # type: ignore
+    return _client
 
 
 async def close():
@@ -196,7 +203,7 @@ async def hget(name: str, key: str) -> Optional[str]:
     """获取哈希表中的字段值"""
     try:
         client = get_client()
-        return await client.hget(name, key)# type: ignore
+        return await client.hget(name, key)
     except Exception as e:
         from loguru import logger
         logger.error(f"Redis HGET 操作失败: {e}")
@@ -207,7 +214,7 @@ async def hset(name: str, key: str, value: str) -> bool:
     """设置哈希表中的字段值"""
     try:
         client = get_client()
-        await client.hset(name, key, value)  # type: ignore
+        await client.hset(name, key, value)
         return True
     except Exception as e:
         from loguru import logger
@@ -219,7 +226,7 @@ async def hgetall(name: str) -> dict:
     """获取哈希表中的所有字段"""
     try:
         client = get_client()
-        return await client.hgetall(name) # type: ignore
+        return await client.hgetall(name)
     except Exception as e:
         from loguru import logger
         logger.error(f"Redis HGETALL 操作失败: {e}")
@@ -230,7 +237,7 @@ async def hdel(name: str, *keys) -> bool:
     """删除哈希表中的字段"""
     try:
         client = get_client()
-        await client.hdel(name, *keys) # type: ignore
+        await client.hdel(name, *keys)
         return True
     except Exception as e:
         from loguru import logger
@@ -242,7 +249,7 @@ async def lpush(name: str, *values) -> int:
     """将值插入到列表头部"""
     try:
         client = get_client()
-        return await client.lpush(name, *values) # type: ignore
+        return await client.lpush(name, *values)
     except Exception as e:
         from loguru import logger
         logger.error(f"Redis LPUSH 操作失败: {e}")
@@ -253,7 +260,7 @@ async def rpush(name: str, *values) -> int:
     """将值插入到列表尾部"""
     try:
         client = get_client()
-        return await client.rpush(name, *values) # type: ignore
+        return await client.rpush(name, *values)
     except Exception as e:
         from loguru import logger
         logger.error(f"Redis RPUSH 操作失败: {e}")
@@ -264,7 +271,7 @@ async def lpop(name: str) -> Optional[str]:
     """移出并获取列表的第一个元素"""
     try:
         client = get_client()
-        return await client.lpop(name) # type: ignore
+        return await client.lpop(name)
     except Exception as e:
         from loguru import logger
         logger.error(f"Redis LPOP 操作失败: {e}")
@@ -275,7 +282,7 @@ async def rpop(name: str) -> Optional[str]:
     """移出并获取列表的最后一个元素"""
     try:
         client = get_client()
-        return await client.rpop(name) # type: ignore
+        return await client.rpop(name)
     except Exception as e:
         from loguru import logger
         logger.error(f"Redis RPOP 操作失败: {e}")
@@ -286,7 +293,7 @@ async def lrange(name: str, start: int, end: int) -> list:
     """获取列表指定范围内的元素"""
     try:
         client = get_client()
-        return await client.lrange(name, start, end) # type: ignore
+        return await client.lrange(name, start, end)
     except Exception as e:
         from loguru import logger
         logger.error(f"Redis LRANGE 操作失败: {e}")
@@ -297,7 +304,7 @@ async def sadd(name: str, *values) -> int:
     """向集合添加成员"""
     try:
         client = get_client()
-        return await client.sadd(name, *values) # type: ignore
+        return await client.sadd(name, *values)
     except Exception as e:
         from loguru import logger
         logger.error(f"Redis SADD 操作失败: {e}")
@@ -308,29 +315,29 @@ async def srem(name: str, *values) -> int:
     """移除集合中的成员"""
     try:
         client = get_client()
-        return await client.srem(name, *values) # type: ignore
+        return await client.srem(name, *values)
     except Exception as e:
         from loguru import logger
         logger.error(f"Redis SREM 操作失败: {e}")
         return 0
 
 
-async def smembers(name: str) -> set:  # type: ignore
+async def smembers(name: str) -> set:
     """获取集合中的所有成员"""
     try:
         client = get_client()
-        return await client.smembers(name) # type: ignore
+        return await client.smembers(name)
     except Exception as e:
         from loguru import logger
         logger.error(f"Redis SMEMBERS 操作失败: {e}")
-        return set()  # type: ignore
+        return set()
 
 
 async def sismember(name: str, value: str) -> bool:
     """判断成员是否是集合的成员"""
     try:
         client = get_client()
-        return await client.sismember(name, value) # type: ignore
+        return await client.sismember(name, value)
     except Exception as e:
         from loguru import logger
         logger.error(f"Redis SISMEMBER 操作失败: {e}")
@@ -385,7 +392,7 @@ async def zremrangebyscore(name: str, min_score: float, max_score: float) -> int
     """移除有序集合中指定分数范围的成员"""
     try:
         client = get_client()
-        return await client.zremrangebyscore(name, min_score, max_score)  # type: ignore
+        return await client.zremrangebyscore(name, min_score, max_score)
     except Exception as e:
         from loguru import logger
         logger.error(f"Redis ZREMRANGEBYSCORE 操作失败: {e}")
@@ -396,7 +403,7 @@ async def zcard(name: str) -> int:
     """获取有序集合的成员数"""
     try:
         client = get_client()
-        return await client.zcard(name)  # type: ignore
+        return await client.zcard(name)
     except Exception as e:
         from loguru import logger
         logger.error(f"Redis ZCARD 操作失败: {e}")

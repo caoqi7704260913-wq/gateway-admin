@@ -7,7 +7,7 @@ import os
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
-from typing import Optional
+from typing import Optional, Union
 
 
 # Gateway 项目根目录（当前文件所在目录的上级）

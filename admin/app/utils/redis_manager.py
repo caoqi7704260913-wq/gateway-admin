@@ -52,22 +52,30 @@ def _init_standalone():
 
 def _init_cluster():
     """初始化集群模式"""
-    global _cluster
+    global _cluster, _client
     
     cluster_nodes = settings.REDIS_CLUSTER_NODES
     if not cluster_nodes:
-        cluster_nodes = [f"{settings.REDIS_HOST}:{settings.REDIS_PORT}"]
-
-    primary_node = cluster_nodes[0]
-    if ':' in primary_node:
-        host, port = primary_node.split(':', 1)
-        url = f"redis://:{settings.REDIS_PASSWORD}@{host}:{port}/0" if settings.REDIS_PASSWORD else f"redis://{host}:{port}/0"
+        cluster_nodes_str = f"{settings.REDIS_HOST}:{settings.REDIS_PORT}"
     else:
-        port = settings.REDIS_PORT
-        url = f"redis://:{settings.REDIS_PASSWORD}@{primary_node}:{port}/0" if settings.REDIS_PASSWORD else f"redis://{primary_node}:{port}/0"
+        cluster_nodes_str = cluster_nodes
 
-    _cluster = RedisCluster.from_url(
-        url,
+    if isinstance(cluster_nodes_str, str):
+        nodes_list = [node.strip() for node in cluster_nodes_str.split(',') if node.strip()]
+    else:
+        nodes_list = cluster_nodes_str
+
+    startup_nodes = []
+    for node in nodes_list:
+        if ':' in node:
+            host, port = node.split(':', 1)
+            startup_nodes.append({"host": host, "port": int(port)})
+        else:
+            startup_nodes.append({"host": node, "port": settings.REDIS_PORT})
+
+    _cluster = RedisCluster(
+        startup_nodes=startup_nodes,
+        password=settings.REDIS_PASSWORD if settings.REDIS_PASSWORD else None,
         max_connections=settings.REDIS_POOL_SIZE,
         decode_responses=settings.REDIS_DECODE_RESPONSES,
     )

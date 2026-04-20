@@ -108,20 +108,20 @@ class RegisterService:
             logger.error(f"从 Redis 获取 HMAC Key 失败: {e}")
             return False
     
-    async def _create_hmac_key_if_needed(self):
-        """如果 Redis 中没有 Gateway 的 HMAC Key，则创建一个新的"""
-        if not self._hmac_key:
-            try:
-                import secrets
-                new_key = secrets.token_urlsafe(32)
-                
-                # 写入 Redis（使用 gateway_app_id）
-                await config_service.set_hmac_key(self.gateway_app_id, new_key)
-                
-                self._hmac_key = new_key
-                logger.info(f"已创建新的 Gateway HMAC Key")
-            except Exception as e:
-                logger.error(f"创建 Gateway HMAC Key 失败: {e}")
+    # async def _create_hmac_key_if_needed(self):
+    #     """如果 Redis 中没有 Gateway 的 HMAC Key，则创建一个新的（已禁用）"""
+    #     if not self._hmac_key:
+    #         try:
+    #             import secrets
+    #             new_key = secrets.token_urlsafe(32)
+    #             
+    #             # 写入 Redis（使用 gateway_app_id）
+    #             await config_service.set_hmac_key(self.gateway_app_id, new_key)
+    #             
+    #             self._hmac_key = new_key
+    #             logger.info(f"已创建新的 Gateway HMAC Key")
+    #         except Exception as e:
+    #             logger.error(f"创建 Gateway HMAC Key 失败: {e}")
     
 
     async def _get_cors_config_from_redis(self):
@@ -163,12 +163,12 @@ class RegisterService:
             # 步骤 0: 从 Redis 获取 Gateway 的 HMAC Key
             has_key = await self._get_hmac_key_from_redis()
             
-            # 步骤 2: 如果没有则创建
             if not has_key:
-                await self._create_hmac_key_if_needed()
+                logger.error("Gateway HMAC Key not found in Redis. Please ensure Gateway is started first.")
+                self._registered = False
+                return False
             
-            # 步骤 3: 从 Redis 获取 CORS 配置
-            await self._get_cors_config_from_redis()
+            # 步骤 3: CORS 配置由 Gateway 管理，跳过
             
             # 步骤 4: 准备注册数据
             import json

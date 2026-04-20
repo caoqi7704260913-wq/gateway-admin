@@ -17,6 +17,7 @@ aiomysql>=0.2.0
 
 # Redis
 redis>=5.2.0
+cachetools>=5.5.0
 
 # HTTP 客户端
 httpx>=0.28.0

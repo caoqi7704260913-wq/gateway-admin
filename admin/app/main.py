@@ -53,13 +53,6 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to create database tables: {e}")
     
-    # 4. 从 Redis 获取并应用默认 CORS 配置
-    cors_initialized = await config_service.init_default_cors()
-    if cors_initialized:
-        logger.info("CORS config initialized from Redis")
-    else:
-        logger.warning("Failed to initialize CORS config, using defaults")
-    
     # 4.1 初始化默认数据（可选，通过环境变量控制）
     if settings.INIT_DEFAULT_DATA:
         try:
