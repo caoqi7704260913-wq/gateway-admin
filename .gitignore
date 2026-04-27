@@ -41,3 +41,6 @@ build/
 data/
 *.json
 !package-lock.json
+
+# Documentation (root level)
+docs/

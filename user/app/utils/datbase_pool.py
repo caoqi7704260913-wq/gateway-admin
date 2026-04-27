@@ -175,7 +175,12 @@ class DatabaseManage:
             await engine.dispose()
 
 
-db_manager = DatabaseManage() # 创建数据库管理实例
+db_manager = DatabaseManage()  # 创建数据库管理实例
+
+
+def get_db_manager() -> DatabaseManage:
+    """获取数据库管理器单例"""
+    return db_manager
 
 
 @contextmanager

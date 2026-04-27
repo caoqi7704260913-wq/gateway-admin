@@ -37,12 +37,8 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Redis connection failed: {e}")
         fallback_manager.set_fallback("redis", True)
 
-    # 初始化 HTTPX
-    try:
-        await httpx_pool.init()
-        logger.info("Httpx initialized")
-    except Exception as e:
-        logger.warning(f"Httpx initialization failed: {e}")   
+    # 初始化 HTTPX（已改为自动懒加载，无需手动 init）
+    logger.info("Httpx pool ready (lazy loading)")   
 
     #注册到Gateway
     try:

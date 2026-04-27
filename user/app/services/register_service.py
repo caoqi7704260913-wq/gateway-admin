@@ -19,17 +19,16 @@ import base64
 from typing import Optional, Dict, Any
 from loguru import logger
 from app.utils.redis_pool import get_redis_pool
-from app.utils.httpx_pool import httpx_pool
-from app.utils.cache_manager import cache_manager
+from app.utils.httpx_pool import get_httpx_pool
+from app.utils.cache_manager import cache_manager, get_cache_manager
 from config.settings import  settings
 
 class RegisterService:
 
     def __init__(self):
-        redis = get_redis_pool()
-        self.redis_instance = redis.get_instance()
-        self.httpx = httpx_pool
-        self.cache = cache_manager
+        self.redis_pool = get_redis_pool()
+        self.httpx_pool = get_httpx_pool()
+        self.cache = get_cache_manager()
         self.gateway_url = settings.GATEWAY_URL # Gateway 的地址
         self.gateway_app_id = settings.GATEWAY_APP_ID # Gateway 的应用 ID
          # 根据 SSL 配置动态选择协议
@@ -57,8 +56,8 @@ class RegisterService:
         self._app_id = settings.SERVICE_NAME
 
     async def _get_hmac_key_signature(self) -> bool:
-        # 先从 Redis 获取 HMAC Key如果没有则从本地缓存中获取
-        hmac_key = await self.redis_instance.get(f"config:hmac:{self.gateway_app_id}")
+        redis_instance = self.redis_pool.get_instance()
+        hmac_key = await redis_instance.get(f"config:hmac:{self.gateway_app_id}")
         if not hmac_key:
              hmac_key = self.cache.get(f"config:hmac:{self.gateway_app_id}")
         if not hmac_key:
@@ -69,8 +68,8 @@ class RegisterService:
     
 
     async def _get_cors_config(self):
-        # 从 Redis 获取 CORS 配置
-        cors_config = await self.redis_instance.get("config:cors")
+        redis_instance = self.redis_pool.get_instance()
+        cors_config = await redis_instance.get("config:cors")
         if not cors_config:
              cors_config = self.cache.get("config:cors")
         if not cors_config:
@@ -131,14 +130,18 @@ class RegisterService:
             headers = self._generate_hmac_signature(body=body)
             headers["Content-Type"] = "application/json"
           
-            await self.httpx.post(
+            response = await self.httpx_pool.post(
                f"{self.gateway_url}/api/services/register",  # 注册服务的接口   
                 content=body,
                 headers=headers,
                 timeout=5.0
             )
-            logger.info("注册服务到 Gateway 成功")
-            self._registered = True
+            if response.status_code == 200:
+                logger.info("注册服务到 Gateway 成功")
+                self._registered = True
+            else:
+                logger.error(f"注册服务到 Gateway 失败: {response.status_code}")
+                self._registered = False
         except Exception as e:
             logger.error(f"注册服务到 Gateway 失败: {e}")
             self._registered = False
@@ -154,7 +157,7 @@ class RegisterService:
         headers = self._generate_hmac_signature(body=body)
         headers["Content-Type"] = "application/json"
         try:
-            response = await self.httpx.delete(
+            response = await self.httpx_pool.delete(
             f"{self.gateway_url}/api/services/unregister",  # 注销服务的接口
             headers=headers,
             content=body,

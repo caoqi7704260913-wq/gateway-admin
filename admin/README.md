@@ -1,14 +1,25 @@
-# 后台管理服务 (Admin Service)
+# Admin Service - 后台管理系统
 
-基于 FastAPI 的后台管理服务，提供管理员、角色、权限、菜单等管理功能。
+基于 FastAPI + SQLModel 的企业级后台管理系统，支持 RBAC 权限控制、JWT 认证、微服务架构。
+
+## 🚀 技术亮点
+
+- **异步高性能**：FastAPI 异步框架，支持高并发
+- **RBAC 权限模型**：管理员-角色-权限三级权限控制
+- **JWT + Redis**：Token 管理，支持主动注销
+- **HMAC 签名认证**：服务间通信安全验证
+- **微服务架构**：自动服务注册发现，Consul/Redis 降级
+- **工程化规范**：类型注解、日志、测试、Docker 部署
 
 ## 技术栈
 
-- FastAPI - Web 框架
-- SQLModel - ORM
-- MySQL - 数据库
-- Redis - Token 存储
-- passlib - 密码哈希
+- **Web 框架**: FastAPI 0.135.3（异步高性能）
+- **ORM**: SQLModel 0.0.27（类型安全）
+- **数据库**: MySQL 8.0 + SQLAlchemy 连接池
+- **缓存**: Redis 7.0（Token 存储、配置管理）
+- **认证**: JWT + HMAC 签名
+- **密码加密**: passlib + bcrypt
+- **部署**: Docker + uvicorn
 
 ## 快速开始
 
@@ -49,7 +60,37 @@ python -m uvicorn app.main:app --reload --port 8001
 python app/main.py
 ```
 
-## 服务功能
+## 架构设计
+
+### RBAC 权限模型
+
+```
+管理员 (Admin)
+  ↓ 多对多
+角色 (Role)
+  ↓ 多对多
+权限 (Permission)
+```
+
+- **灵活授权**：一个管理员可以有多个角色
+- **细粒度控制**：权限精确到 API 接口
+- **菜单联动**：根据权限动态生成菜单
+
+### 微服务集成
+
+```
+┌─────────────┐
+│   Gateway    │ ← API 网关（HMAC 认证、限流）
+└──────┬──────┘
+       │
+  ┌────┴────┐
+  ↓         ↓
+[Admin]  [User]
+  ↓         ↓
+[MySQL]  [MySQL]
+  ↓
+[Redis]  ← Token/配置共享
+```
 
 ### 表结构
 
