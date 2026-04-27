@@ -60,18 +60,14 @@ async def lifespan(app: FastAPI):
         # 优先使用 .env 中的密钥，如果没有则生成新的
         new_key = settings.HMAC_SECRET_KEY or secrets.token_urlsafe(32)
         
-        if not settings.HMAC_SECRET_KEY:
-            logger.warning("⚠️  .env 中未配置 HMAC_SECRET_KEY，已自动生成新密钥")
-        else:
-            logger.info("✅ 使用 .env 中的 HMAC_SECRET_KEY")
-        
+
         await redis.set("config:hmac:gateway", new_key)
-        logger.info(f"Gateway HMAC 密钥已存储到 Redis")
+        #logger.info(f"Gateway HMAC 密钥已存储到 Redis")
         
         # 重新加载配置
         await config_manager.load_configs()
     else:
-        logger.debug("Gateway HMAC 密钥已存在")
+        pass
 
     # 初始化 HMAC 密钥（如果不存在则生成）
     from app.services.config_manager import get_config_manager
@@ -82,9 +78,6 @@ async def lifespan(app: FastAPI):
     if not existing_key:
         new_key = secrets.token_urlsafe(32)
         await config_mgr.create_hmac_key("gateway", new_key)
-        logger.info(f"Gateway HMAC 密钥已生成并写入 Redis: {new_key[:16]}...")
-    else:
-        logger.debug(f"Gateway HMAC 密钥已存在: {existing_key[:16]}...")
 
     # 启动健康检查服务（从 Redis 读取已注册的服务）
     from app.services.health_checker import HealthChecker
@@ -120,12 +113,8 @@ async def lifespan(app: FastAPI):
                     )
                     task = asyncio.create_task(checker.start_health_check())
                     health_checkers.append((checker, task))
-                    logger.info(f" 已启动服务 [{service_name}] 的健康检查")
-        
-        if not health_checkers:
-            logger.info("ℹ 暂无已注册的服务，健康检查未启动")
     except Exception as e:
-        logger.warning(f"启动健康检查服务失败: {e}")
+        pass
 
     logger.info(f"Gateway 启动成功: http{'s' if settings.HTTPS_ENABLED else ''}://{settings.HOST}:{settings.PORT}")
 
@@ -177,7 +166,7 @@ async def proxy(request: Request, path: str):
     
     将请求转发到对应的后端服务
     """
-    print(f"\n🔀 [Gateway Proxy] Received request: {request.method} /{path}")
+   
     logger.info(f"🔀 [Gateway Proxy] Received request: {request.method} /{path}")
     
     router = get_router()
